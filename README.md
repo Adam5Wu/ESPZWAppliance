@@ -21,11 +21,19 @@ and
 
 *Why the module cannot get Internet?* (Because the AP / password is different?)
 
+*How do I set the new AP and password?* (Hack and rebuild?)
+
+*Wait... I didn't bring my dev environment with me to rerebuild!*
+
 *And why is the time off by a couple of hours?* (Because you are in a different time zone?)
 
-*And why ...*
+*How do I set the local timezone?* (Hack and rebuild?)
 
-Well, it is not so simple after all. You have an application, but you need an appliance.
+*Wait...*
+
+Well, it is not so simple after all.
+
+You have an application, but you need an appliance.
 
 ## Motivation
 
