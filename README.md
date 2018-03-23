@@ -15,8 +15,15 @@ Hack ... hack ... hack ... DONE! It works!! Yay!!!
 Then you want to show it off to your friends and/or potential customers.
 
 It is so easy, just bring the tiny module and a battery to wherever and turn it on
-and ... Ooops, *why the module cannot get Internet?* (Because the AP / password is different?)
+and
+
+... Ooops!
+
+*Why the module cannot get Internet?* (Because the AP / password is different?)
+
 *And why is the time off by a couple of hours?* (Because you are in a different time zone?)
+
+*And why ...*
 
 Well, it is not so simple after all. You have an application, but you need an appliance.
 
