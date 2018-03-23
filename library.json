@@ -1,0 +1,17 @@
+{
+  "name":"ESP ZWAppliance",
+  "description":"All-in-one appliance middleware for ESP8266 projects",
+  "keywords":"esp8266,appliance,web,ota",
+  "authors":
+  {
+    "name": "Zhenyu Wu",
+    "maintainer": true
+  },
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/Adam5Wu/ESPZWAppliance.git"
+  },
+  "frameworks": "arduino",
+  "platforms":"espressif",
+}
