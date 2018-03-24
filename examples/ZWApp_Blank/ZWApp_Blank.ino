@@ -13,6 +13,7 @@
 
 // This demo presents a bare-bone behaviour of the ZWAppliance
 // All logic is built into the library
+#define NO_GLOBAL_SPIFFS
 
 #include <ESPZWAppliance.h>
 
