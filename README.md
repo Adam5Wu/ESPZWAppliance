@@ -35,20 +35,20 @@ and ...
 
 Well, it is not so simple after all.
 
-You have an application, but you need an appliance.
+You have an *application*, but you need an ***appliance***.
 
 ## Motivation
 
 While every application is very unique and brilliant, they all need some basic supporting
 functionalities to turn them into an appliance.
 
-These supporting functions are more-or-less generic, which means "boring" to develop.
+These supporting functions are more-or-less *generic*, which means *"boring"* to develop.
 However, if not handled well, a defect in the supporting layer can significantly impact
 the overall performance of the application.
 
 This project is my effort to provide a unified middle-ware of basic supporting services
-for any ESP8266 projects, so that making a functional and reliable appliance from an
-application becomes truly easy.
+for any ESP8266 project, so that making a functional and reliable appliance from an
+application becomes truly *easy*.
 
 ## Features
 
