@@ -1,5 +1,5 @@
 #include <sys/time.h>
-#include <algorithm>
+#include <limits.h>
 
 #include <FS.h>
 #include <sntp.h>
