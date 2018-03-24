@@ -33,6 +33,12 @@
 
 #define PORTAL_SHUTDOWN_DELAY   1
 
+#define CONFIG_DEFAULT_HOSTNAME_PFX       "ESP8266-"
+#define CONFIG_DEFAULT_INIT_RETRY_CYCLE   10          // Seconds to wait before retry init steps (AP/NTP) or access point test
+#define CONFIG_DEFAULT_INIT_RETRY_COUNT   6           // Number of retries before fallback to portal mode from init mode
+#define CONFIG_DEFAULT_PORTAL_TIMEOUT     (5 * 60)    // Seconds the web portal is active and idle after enter service mode
+#define CONFIG_DEFAULT_PORTAL_APTEST      30          // Seconds to test access point after entering portal mode and web portal is idle
+
 enum AppState {
 	APP_STARTUP = 0,
 	APP_INIT,
@@ -63,7 +69,8 @@ enum InitSteps {
 };
 
 enum PortalSteps {
-	PORTAL_DOWN = 0,
+	PORTAL_OFF = 0,
+	PORTAL_DOWN,
 	PORTAL_SETUP,
 	PORTAL_ACCOUNT,
 	PORTAL_ACCESSCTRL,
@@ -189,8 +196,6 @@ void SwitchState(AppState state) {
 	ESPAPP_DEBUG("Start of state [%s] @%s\n", SFPSTR(StrAppState(AppGlobal.State)),
 		PrintTime(AppGlobal.StageTS).c_str());
 }
-
-#define CONFIG_DEFAULT_HOSTNAME_PFX     "ESP8266-"
 
 Dir get_dir(String const &path) {
 	auto Ret = mkdirs(VFATFS, path);
@@ -327,7 +332,7 @@ void setup() {
 	//AppGlobal.State = APP_STARTUP;
 	AppGlobal.StartTS = GetCurrentTS();
 	AppGlobal.StageTS = AppGlobal.StartTS;
-	//AppGlobal.wsSteps = PORTAL_DOWN;
+	//AppGlobal.wsSteps = PORTAL_OFF;
 
 	ESPAPP_DEBUG("Starting Filesystem...\n");
 	// Two partitions, one primary, one backup
@@ -583,6 +588,7 @@ File Portal_WebServer_CheckRestoreRes(Dir &dir, String const &resfile, PGM_P res
 
 void Portal_WebServer_Operations() {
 	switch (AppGlobal.wsSteps) {
+		case PORTAL_OFF:
 		case PORTAL_UP: {
 			// Do Nothing
 		} break;
@@ -999,7 +1005,7 @@ void Portal_Stop() {
 		delete AppGlobal.webAuthSessions;
 		AppGlobal.webAuthSessions = nullptr;
 		ESPAPP_LOG("Device portal has stopped.\n");
-		AppGlobal.wsSteps = PORTAL_DOWN;
+		AppGlobal.wsSteps = PORTAL_OFF;
 	}
 }
 
@@ -1090,9 +1096,11 @@ void Service_TimePortal() {
 }
 
 void Service_StartPortal(time_t StartTS) {
-	if (!AppGlobal.service.portalTimer)
-		AppGlobal.service.portalTimer = new Ticker();
-	AppGlobal.service.portalTimer->attach(10, Service_TimePortal);
+	if (AppConfig.Portal_Timeout) {
+		if (!AppGlobal.service.portalTimer)
+			AppGlobal.service.portalTimer = new Ticker();
+		AppGlobal.service.portalTimer->attach(10, Service_TimePortal);
+	}
 	AppGlobal.wsActivityTS = StartTS;
 	AppGlobal.wsSteps = PORTAL_SETUP;
 }
@@ -1191,11 +1199,15 @@ void loop() {
 // User-App service routines
 
 void WebPortal_Start() {
-	Service_StartPortal(GetCurrentTS());
+	if (AppGlobal.wsSteps == PORTAL_OFF) {
+		Service_StartPortal(GetCurrentTS());
+	}
 }
 
 void WebPortal_Stop() {
-	AppGlobal.wsSteps = PORTAL_DOWN;
+	if (AppGlobal.wsSteps > PORTAL_DOWN) {
+		AppGlobal.wsSteps = PORTAL_DOWN;
+	}
 }
 
 extern void Device_Restart() {

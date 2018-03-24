@@ -55,11 +55,6 @@ const char PORTAL_DEFAULT_ACL[] PROGMEM =
   PORTAL_API_OTA      ":$B:"    PORTAL_ADMIN_USER "\n"
   PORTAL_FSDAV_ROOT   ":$A:"    PORTAL_ADMIN_USER "\n";
 
-#define CONFIG_DEFAULT_INIT_RETRY_CYCLE   10          // Seconds to wait before retry init steps (AP/NTP) or access point test
-#define CONFIG_DEFAULT_INIT_RETRY_COUNT   6           // Number of retries before fallback to portal mode from init mode
-#define CONFIG_DEFAULT_PORTAL_TIMEOUT     (5 * 60)    // Seconds the web portal is active and idle after enter service mode
-#define CONFIG_DEFAULT_PORTAL_APTEST      30          // Seconds to test access point after entering portal mode and web portal is idle
-
 extern const char PORTAL_INDEX_PAGE[];
 extern const char PORTAL_DEVRESET_PAGE[];
 extern const char PORTAL_DEVRESTART_PAGE[];
