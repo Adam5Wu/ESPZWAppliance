@@ -50,7 +50,7 @@ typedef Internals::DynamicJsonBufferBase<BoundedOneshotAllocator> BoundedDynamic
 typedef std::function<bool(JsonObject &obj, BoundedDynamicJsonBuffer &buf)> JsonObjectCallback;
 typedef std::function<bool(fs::File &file)> JsonFileCallback;
 
-typedef enum JsonManagerResults {
+typedef enum {
   JSONMAN_OK_READONLY,
   JSONMAN_OK_UPDATED,
   JSONMAN_WARN,
@@ -59,7 +59,7 @@ typedef enum JsonManagerResults {
   JSONMAN_ERR,
   JSONMAN_ERR_MALSTOR,
   JSONMAN_ERR_PARSER,
-};
+} JsonManagerResults;
 
 JsonManagerResults JsonManager(fs::Dir &dir, String const &name, bool create_new,
                                JsonObjectCallback const &obj_cb,
