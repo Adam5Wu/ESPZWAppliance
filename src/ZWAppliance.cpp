@@ -138,6 +138,7 @@ String PrintTime(time_t ts) {
 }
 
 void Portal_Stop();
+extern void __userapp_teardown();
 
 time_t FinalizeCurrentState() {
 	switch (AppGlobal.State) {
@@ -157,6 +158,7 @@ time_t FinalizeCurrentState() {
 		case APP_SERVICE:
 			delete AppGlobal.service.portalTimer;
 			delete AppGlobal.service.apTestTimer;
+			__userapp_teardown();
 			break;
 
 		case APP_DEVRESET:

@@ -8,6 +8,7 @@ extern void WebPortal_Stop();
 extern void Device_Restart();
 
 #define setup __userapp_setup
+#define teardown __userapp_teardown
 #define loop __userapp_loop
 
 #endif //__ESPZWAppliance_H__

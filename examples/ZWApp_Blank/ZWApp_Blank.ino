@@ -18,10 +18,14 @@
 #include <ESPZWAppliance.h>
 
 void setup() {
-	// Do Nothing
+  // Do Nothing
+}
+
+void teardown() {
+  // Do Nothing
 }
 
 void loop() {
-	// Do Nothing
+  // Do Nothing
 }
 
