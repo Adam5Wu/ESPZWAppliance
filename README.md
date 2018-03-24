@@ -8,14 +8,16 @@ All-in-one appliance middle-ware for ESP8266 projects.
 
 ## Prologue
 
-So you have a bright new idea, and you want to put it on your ESP8266.
+So, you have a bright new idea, and you want to put it on your ESP8266.
 
 Hack ... hack ... hack ... DONE! It works!! Yay!!!
 
 Then you want to show it off to your friends and/or potential customers.
 
-It is so easy, just bring the tiny module and a battery to wherever and turn it on
+It is so easy, just bring the tiny module and a battery to wherever,
 and
+turn it on ...
+and ...
 
 ... Ooops!
 
@@ -23,7 +25,7 @@ and
 
 *How do I set the new AP and password?* (Hack and rebuild?)
 
-*Wait... I didn't bring my dev environment with me to rerebuild!*
+*Wait, I didn't bring my dev environment with me to rebuild!*
 
 *And why is the time off by a couple of hours?* (Because you are in a different time zone?)
 
