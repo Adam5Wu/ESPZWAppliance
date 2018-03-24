@@ -72,19 +72,20 @@ when connected to triggers automatic browser display of the main index Webpage
 
 ## How to use
 
+[ESP8266 Arduino Core Fork](https://github.com/Adam5Wu/Arduino-esp8266) is required, it peeks the latest fixes from the upstream, plus some of my own improvements and enhancements, such as support of ESPVFATFS, improved String/Stream implementation, BearSSL, etc.
+
 Install the library - clone this repo into the "libraries" folder in your Arduino projects (found in your home / document directory).
 
 Install all dependent libraries in similar fashion:
-- [ESP8266 Arduino Core Fork](https://github.com/Adam5Wu/Arduino-esp8266)
+- [ArduinoJson Fork](https://github.com/Adam5Wu/ArduinoJson)
 - [ZWUtils-Arduino](https://github.com/Adam5Wu/ZWUtils-Arduino)
 - [ESPVFATFS](https://github.com/Adam5Wu/ESPVFATFS)
-- [ArduinoJson Fork](https://github.com/Adam5Wu/ArduinoJson)
-- [Arduino Time Library Fork](https://github.com/Adam5Wu/Time)
-- [Arduino Timezone Library Fork](https://github.com/Adam5Wu/Timezone)
 - [ESPEasyAuth](https://github.com/Adam5Wu/ESPEasyAuth)
 - [ESPAsyncTCP Fork](https://github.com/Adam5Wu/ESPAsyncTCP)
-- [ESPAsyncUDP](https://github.com/me-no-dev/ESPAsyncUDP)
 - [ESPAsyncWebServer Permanent Fork](https://github.com/Adam5Wu/ESPAsyncWebServer)
+- [Arduino Time Library Fork](https://github.com/Adam5Wu/Time)
+- [Arduino Timezone Library Fork](https://github.com/Adam5Wu/Timezone)
+- [ESPAsyncUDP](https://github.com/me-no-dev/ESPAsyncUDP)
 
 (Re)start the Arduino, open up the example from menu [File] - [Examples] - [ESP ZWAppliance] - [Blank]
 
