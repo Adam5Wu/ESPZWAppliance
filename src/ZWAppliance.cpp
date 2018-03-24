@@ -145,6 +145,10 @@ String PrintTime(time_t ts) {
 }
 
 void Portal_Stop();
+
+extern void __userapp_setup();
+extern void __userapp_startup();
+extern void __userapp_loop();
 extern void __userapp_teardown();
 
 time_t FinalizeCurrentState() {
@@ -375,6 +379,8 @@ void setup() {
 		}
 	}
 	WiFi.setOutputPower(20.5);
+
+	__userapp_setup();
 }
 
 void Init_WLAN_Connect() {
@@ -1131,8 +1137,6 @@ void Service_APMonitor() {
 	}
 }
 
-extern void __userapp_setup();
-
 void Service_Start() {
 	SwitchState(APP_SERVICE);
 
@@ -1142,10 +1146,8 @@ void Service_Start() {
 		Service_StartPortal(AppGlobal.StageTS);
 	}
 
-	__userapp_setup();
+	__userapp_startup();
 }
-
-extern void __userapp_loop();
 
 void loop_SERVICE() {
 	if (AppGlobal.service.portalFallback) {

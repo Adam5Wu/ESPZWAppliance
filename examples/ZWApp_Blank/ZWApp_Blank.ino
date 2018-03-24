@@ -18,14 +18,37 @@
 #include <ESPZWAppliance.h>
 
 void setup() {
-  // Do Nothing
+  // This function is NOT the actual sketch setup.
+	// (The sketch setup has been managed by the ZWAppliance)
+	// This function is invoked once at the end of ZWAppliance setup.
+	// The following has already been configured:
+	// - Serial: 115200
+	// - vFATFS: mounted
+	// - WiFi: non-presistent, 802.11n, light-sleep, max-power
+	// - Time: Initialized to UTC 00:00:00 January 1, 2018
+	// - Timezone: loaded from configuration, or default UTC
 }
 
-void teardown() {
-  // Do Nothing
+void startup() {
+	// This function is invoked each time ZWAppliance enters service mode.
+	// The following condition has been reached:
+	// - WiFi: Connected to configured access point
+	// - Time: Synchronized with NTP server if configured (default not)
+	// - WebPortal: Started if idle timeout configured (default 5min)
 }
 
 void loop() {
-  // Do Nothing
+  // This function is NOT the actual sketch loop.
+	// (The sketch loop has been managed by the ZWAppliance)
+	// While the ZWAppliance is in service mode, this function is invoked
+  //   in similar manner as sketch loop;
+	// However, if the ZWAppliance is not in service mode, this function
+  //   will not be invoked.
 }
 
+void teardown() {
+	// This function is invoked each time ZWAppliance leaves service mode.
+	// The following condition has been reached:
+	// - WiFi: The configure access point has been disconnected, and
+	//           is not reachable without configured timeout
+}

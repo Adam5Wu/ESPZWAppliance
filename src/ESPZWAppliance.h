@@ -8,6 +8,7 @@ extern void WebPortal_Stop();
 extern void Device_Restart();
 
 #define setup __userapp_setup
+#define startup __userapp_startup
 #define teardown __userapp_teardown
 #define loop __userapp_loop
 
