@@ -45,10 +45,13 @@
 #define JSON_MAXIMUM_PARSER_BUFFER 2048
 #define JSON_MAXIMUM_PARSER_NEST   2
 
-typedef Internals::DynamicJsonBufferBase<BoundedOneshotAllocator> BoundedDynamicJsonBuffer;
+typedef Internals::DynamicJsonBufferBase<BoundedOneshotAllocator>
+	BoundedDynamicJsonBuffer;
 
-typedef std::function<bool(JsonObject &obj, BoundedDynamicJsonBuffer &buf)> JsonObjectCallback;
-typedef std::function<bool(fs::File &file)> JsonFileCallback;
+typedef std::function<bool(JsonObject &obj, BoundedDynamicJsonBuffer &buf)>
+	JsonObjectCallback;
+typedef std::function<bool(fs::File &file)>
+	JsonFileCallback;
 
 typedef enum {
   JSONMAN_OK_READONLY,

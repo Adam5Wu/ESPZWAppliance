@@ -1,5 +1,5 @@
 
-#include "PGMRES.hpp"
+#include "ZWApplianceRes.hpp"
 
 #include <pgmspace.h>
 

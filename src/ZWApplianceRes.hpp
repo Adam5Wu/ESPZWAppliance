@@ -4,7 +4,7 @@
 #define APP_VERSION   "0.1"
 
 #define CONFIG_DIR            "/config"
-#define APPCONFIG_FILE        "appliance.json"
+#define APPLIANCE_CONFIG_FILE "appliance.json"
 #define PORTAL_ACCOUNTS_FILE  "portal.accounts.txt"
 #define PORTAL_ACCESS_FILE    "portal.access.txt"
 
