@@ -210,7 +210,20 @@ static Dir get_dir(String const &path) {
 	return std::move(Ret);
 }
 
-static int8_t load_config_timezone(JsonObject &obj, TimeChangeRule &r) {
+static void init_config_defaults() {
+	AppConfig.WLAN_AP_Name.clear();
+	AppConfig.WLAN_AP_Pass.clear();
+	AppConfig.Init_Retry_Count = CONFIG_DEFAULT_INIT_RETRY_COUNT;
+	AppConfig.Init_Retry_Cycle = CONFIG_DEFAULT_INIT_RETRY_CYCLE;
+	AppConfig.Hostname = String(FC(CONFIG_DEFAULT_HOSTNAME_PFX)) +
+		String(ESP.getChipId(), 16);
+	AppConfig.Portal_Timeout = CONFIG_DEFAULT_PORTAL_TIMEOUT;
+	AppConfig.Portal_APTest = CONFIG_DEFAULT_PORTAL_APTEST;
+	AppConfig.NTP_Server.clear();
+	AppConfig.TZ.setRules(Timezone::UTC, Timezone::UTC);
+}
+
+static int8_t load_config_timezone(JsonObject const &obj, TimeChangeRule &r) {
 	if (obj.success()) {
 		String Name = obj[FC("Name")] | String(FC("Local")).c_str();
 		// The following parameters are mandatory!
@@ -262,20 +275,7 @@ static int8_t load_config_timezone(JsonObject &obj, TimeChangeRule &r) {
 	return -2;
 }
 
-static void init_config_defaults() {
-	AppConfig.WLAN_AP_Name.clear();
-	AppConfig.WLAN_AP_Pass.clear();
-	AppConfig.Init_Retry_Count = CONFIG_DEFAULT_INIT_RETRY_COUNT;
-	AppConfig.Init_Retry_Cycle = CONFIG_DEFAULT_INIT_RETRY_CYCLE;
-	AppConfig.Hostname = String(FC(CONFIG_DEFAULT_HOSTNAME_PFX)) +
-		String(ESP.getChipId(), 16);
-	AppConfig.Portal_Timeout = CONFIG_DEFAULT_PORTAL_TIMEOUT;
-	AppConfig.Portal_APTest = CONFIG_DEFAULT_PORTAL_APTEST;
-	AppConfig.NTP_Server.clear();
-	AppConfig.TZ.setRules(Timezone::UTC, Timezone::UTC);
-}
-
-static void load_config_json(JsonObject &obj) {
+static void load_config_json(JsonObject const &obj) {
 	AppConfig.WLAN_AP_Name = obj[FC("WLAN_AP_Name")] | AppConfig.WLAN_AP_Name.c_str();
 	AppConfig.WLAN_AP_Pass = obj[FC("WLAN_AP_Pass")] | AppConfig.WLAN_AP_Pass.c_str();
 	AppConfig.Init_Retry_Count = obj[FC("Init_Retry_Count")] | AppConfig.Init_Retry_Count;
@@ -303,15 +303,7 @@ static void load_config_json(JsonObject &obj) {
 	} while (false);
 }
 
-void load_config(String const &filename, std::function<void(JsonObject &obj)> const &load_cb) {
-	AppConfig.WLAN_AP_Name.clear();
-	AppConfig.WLAN_AP_Pass.clear();
-	AppConfig.Init_Retry_Count = CONFIG_DEFAULT_INIT_RETRY_COUNT;
-	AppConfig.Init_Retry_Cycle = CONFIG_DEFAULT_INIT_RETRY_CYCLE;
-	AppConfig.Hostname = String(FC(CONFIG_DEFAULT_HOSTNAME_PFX)) + String(ESP.getChipId(), 16);
-	AppConfig.Portal_Timeout = CONFIG_DEFAULT_PORTAL_TIMEOUT;
-	AppConfig.Portal_APTest = CONFIG_DEFAULT_PORTAL_APTEST;
-
+void load_config(String const &filename, std::function<void(JsonObject const &obj)> const &load_cb) {
 	auto ConfigDir = get_dir(FC(CONFIG_DIR));
 	if (JsonManager(ConfigDir, filename, true,
 		[&](JsonObject &obj, BoundedDynamicJsonBuffer &parsebuf) {
@@ -622,6 +614,7 @@ static void Portal_WebServer_Operations() {
 		} break;
 
 		case PORTAL_SETUP: {
+			ESPAPP_DEBUG("Bringing up portal service...\n");
 			AppGlobal.webServer = new AsyncWebServer(80);
 			AppGlobal.webServer->configRealm(AppConfig.Hostname);
 			AppGlobal.wsSteps = PORTAL_ACCOUNT;
@@ -704,7 +697,6 @@ static void Portal_WebServer_Operations() {
 		} break;
 
 		case PORTAL_START: {
-			ESPAPP_DEBUG("Bringing up portal service...\n");
 			bool isCaptive = AppGlobal.State == APP_PORTAL;
 
 			if (isCaptive) {
@@ -1225,7 +1217,7 @@ Dir Appliance_GetDir(String const &path) {
 }
 
 void Appliance_LoadConfig(String const &filename,
-	std::function<void(JsonObject &obj)> const &callback) {
+	std::function<void(JsonObject const &obj)> const &callback) {
 	return load_config(filename, callback);
 }
 
@@ -1233,7 +1225,7 @@ AsyncWebServer* Appliance_WebPortal() {
 	return AppGlobal.webServer;
 }
 
-void Appliance_WebPortal_Start() {
+void Appliance_WebPortal_TimedStart() {
 	if (AppGlobal.wsSteps == PORTAL_OFF) {
 		Service_StartPortal(GetCurrentTS());
 	}

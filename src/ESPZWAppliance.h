@@ -12,7 +12,7 @@
 Dir Appliance_GetDir(String const &path);
 
 void Appliance_LoadConfig(String const &filename,
-	std::function<void(JsonObject &obj)> const &callback);
+	std::function<void(JsonObject const &obj)> const &callback);
 
 AsyncWebServer* Appliance_WebPortal();
 void Appliance_WebPortal_TimedStart();
