@@ -5,6 +5,11 @@
 #include <sntp.h>
 #include <user_interface.h>
 
+extern "C" {
+	void tune_timeshift64 (uint64_t now_us);
+	extern struct rst_info resetInfo;
+}
+
 #include <Ticker.h>
 #include <ESP8266WiFi.h>
 #include <DNSServer.h>
@@ -317,10 +322,6 @@ void load_config(String const &filename, std::function<void(JsonObject const &ob
 	}
 }
 
-extern "C" {
-	void tune_timeshift64 (uint64_t now_us);
-}
-
 static void InitBootTime() {
 	struct tm BootTM;
 	BootTM.tm_year = 2018 - 1900;
@@ -341,6 +342,8 @@ void setup() {
 	InitBootTime();
 
 	Serial.println(FC("ESP8266 ZWAppliance Core v" APP_VERSION));
+	ESPAPP_DEBUG("Last reset: %d\n", resetInfo.reason);
+
 	memset(&AppGlobal, 0, sizeof(AppGlobal));
 	//AppGlobal.State = APP_STARTUP;
 	AppGlobal.StartTS = GetCurrentTS();
@@ -377,12 +380,11 @@ void setup() {
 	}
 	// Order is important
 	WiFi.persistent(false);
-
-	if (WiFi.getSleepMode() != WIFI_LIGHT_SLEEP) {
-		if (!WiFi.setSleepMode(WIFI_LIGHT_SLEEP)) {
-			ESPAPP_LOG("WARNING: Failed to configure WiFi energy saving!\n");
-		}
-	}
+	//if (WiFi.getSleepMode() != WIFI_LIGHT_SLEEP) {
+	//	if (!WiFi.setSleepMode(WIFI_LIGHT_SLEEP)) {
+	//		ESPAPP_LOG("WARNING: Failed to configure WiFi energy saving!\n");
+	//	}
+	//}
 	if (WiFi.getPhyMode() != WIFI_PHY_MODE_11N) {
 		if (!WiFi.setPhyMode(WIFI_PHY_MODE_11N)) {
 			ESPAPP_LOG("WARNING: Failed to configure WiFi in 802.11n mode!\n");
@@ -473,7 +475,7 @@ static void loop_INIT() {
 							time_t cycleSpan = AppConfig.Init_Retry_Cycle - ConnectSpan;
 							if (cycleSpan != AppGlobal.init.cycleSpan) {
 								AppGlobal.init.cycleSpan = cycleSpan;
-								ESPAPP_DEBUG_LOG("Waiting for WiFi connection... "
+								ESPAPP_LOG("Waiting for WiFi connection... "
 									"(%s to next retry)\n",
 									ToString(cycleSpan, TimeUnit::SEC, true).c_str());
 							}
@@ -504,7 +506,7 @@ static void loop_INIT() {
 							time_t cycleSpan = AppConfig.Init_Retry_Cycle - ConnectSpan;
 							if (cycleSpan != AppGlobal.init.cycleSpan) {
 								AppGlobal.init.cycleSpan = cycleSpan;
-								ESPAPP_DEBUG_LOG("Waiting for NTP synchronization... "
+								ESPAPP_LOG("Waiting for NTP synchronization... "
 									"(%s to next retry)\n",
 									ToString(cycleSpan, TimeUnit::SEC, true).c_str());
 							}
