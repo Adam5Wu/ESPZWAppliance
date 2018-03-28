@@ -88,6 +88,7 @@ typedef enum {
 
 static struct {
 	AppState State;
+	bool NoService;
 	time_t StageTS;
 	time_t StartTS;
 
@@ -152,7 +153,7 @@ static String PrintTime(time_t ts) {
 static void Portal_Stop();
 
 extern void __userapp_setup();
-extern void __userapp_startup();
+extern bool __userapp_startup();
 extern void __userapp_loop();
 extern void __userapp_teardown();
 
@@ -174,7 +175,9 @@ static time_t FinalizeCurrentState() {
 		case APP_SERVICE:
 			delete AppGlobal.service.portalTimer;
 			delete AppGlobal.service.apTestTimer;
-			__userapp_teardown();
+
+			if (!AppGlobal.NoService)
+				__userapp_teardown();
 			break;
 
 		case APP_DEVRESET:
@@ -333,22 +336,43 @@ static void InitBootTime() {
 	tune_timeshift64(mktime(&BootTM) * 1000000ull);
 }
 
+static PGM_P resetReasonToStr(uint32_t reason) {
+	switch (reason) {
+		case 0: return PSTR_C("Power on");
+		case 1: return PSTR_C("Hard WDT");
+		case 2: return PSTR_C("Fatal Exception");
+		case 3: return PSTR_C("Soft WDT");
+		case 4: return PSTR_C("Soft reset");
+		case 5: return PSTR_C("Deep sleep");
+		case 6: return PSTR_C("Hard reset");
+		default: return PSTR_C("Unknown");
+	}
+}
+
 void setup() {
 	Serial.begin(115200);
 	delay(100);
 	Serial.println();
+	Serial.println(FC("ESP8266 ZWAppliance Core v" APP_VERSION));
 
 	// Set a reasonable start time
 	InitBootTime();
-
-	Serial.println(FC("ESP8266 ZWAppliance Core v" APP_VERSION));
-	ESPAPP_DEBUG("Last reset: %d\n", resetInfo.reason);
 
 	memset(&AppGlobal, 0, sizeof(AppGlobal));
 	//AppGlobal.State = APP_STARTUP;
 	AppGlobal.StartTS = GetCurrentTS();
 	AppGlobal.StageTS = AppGlobal.StartTS;
 	//AppGlobal.wsSteps = PORTAL_OFF;
+
+	// Base on boot reason, decide whether we should bypass service
+	ESPAPP_DEBUG("Boot reason: %s\n",
+		SFPSTR(resetReasonToStr(resetInfo.reason)));
+	if ((resetInfo.reason == 1) ||	// Hard WDT
+		(resetInfo.reason == 2) ||	// Fatal Exception
+		(resetInfo.reason == 3)) {	// Soft WDT
+		ESPAPP_DEBUG("WARNING: Service failed in previous boot, bypassing...\n");
+		AppGlobal.NoService = true;
+	}
 
 	ESPAPP_DEBUG("Starting Filesystem...\n");
 	// Two partitions, one primary, one backup
@@ -392,7 +416,8 @@ void setup() {
 	}
 	WiFi.setOutputPower(20.5);
 
-	__userapp_setup();
+	if (!AppGlobal.NoService)
+		__userapp_setup();
 }
 
 static void Init_WLAN_Connect() {
@@ -1107,9 +1132,11 @@ static void Service_TimePortal() {
 	unsigned int PortalIdle = GetCurrentTS() - AppGlobal.wsActivityTS;
 	if (PortalIdle >= AppConfig.Portal_Timeout) {
 		AppGlobal.service.portalTimer->detach();
-		ESPAPP_DEBUG("Portal idle for %s, shutting down...\n",
-			ToString(PortalIdle, TimeUnit::SEC, true).c_str());
-		AppGlobal.wsSteps = PORTAL_DOWN;
+		if (!AppGlobal.NoService) {
+			ESPAPP_DEBUG("Portal idle for %s, shutting down...\n",
+				ToString(PortalIdle, TimeUnit::SEC, true).c_str());
+			AppGlobal.wsSteps = PORTAL_DOWN;
+		}
 	}
 }
 
@@ -1154,11 +1181,17 @@ static void Service_Start() {
 
 	AppGlobal.service.apTestTimer = new Ticker();
 	AppGlobal.service.apTestTimer->attach(1, Service_APMonitor);
-	if (AppConfig.Portal_Timeout) {
+	if (AppConfig.Portal_Timeout || AppGlobal.NoService) {
 		Service_StartPortal(AppGlobal.StageTS);
 	}
 
-	__userapp_startup();
+	if (!AppGlobal.NoService) {
+		if (!__userapp_startup()) {
+			// Fall back to service bypass mode
+			AppGlobal.NoService = true;
+			AppGlobal.wsSteps = PORTAL_SETUP;
+		}
+	}
 }
 
 static void loop_SERVICE() {
@@ -1170,7 +1203,8 @@ static void loop_SERVICE() {
 	}
 	Portal_WebServer_Operations();
 
-	__userapp_loop();
+	if (!AppGlobal.NoService)
+		__userapp_loop();
 }
 
 void loop() {
