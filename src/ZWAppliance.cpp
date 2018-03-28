@@ -380,11 +380,11 @@ void setup() {
 	}
 	// Order is important
 	WiFi.persistent(false);
-	//if (WiFi.getSleepMode() != WIFI_LIGHT_SLEEP) {
-	//	if (!WiFi.setSleepMode(WIFI_LIGHT_SLEEP)) {
-	//		ESPAPP_LOG("WARNING: Failed to configure WiFi energy saving!\n");
-	//	}
-	//}
+	if (WiFi.getSleepMode() != WIFI_MODEM_SLEEP) {
+		if (!WiFi.setSleepMode(WIFI_MODEM_SLEEP)) {
+			ESPAPP_LOG("WARNING: Failed to configure WiFi energy saving!\n");
+		}
+	}
 	if (WiFi.getPhyMode() != WIFI_PHY_MODE_11N) {
 		if (!WiFi.setPhyMode(WIFI_PHY_MODE_11N)) {
 			ESPAPP_LOG("WARNING: Failed to configure WiFi in 802.11n mode!\n");
