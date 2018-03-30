@@ -3,7 +3,8 @@
 
 #include <Units.h>
 
-JsonManagerResults JsonManager(fs::Dir &dir, String const &name, bool create_new,
+JsonManagerResults JsonManager(fs::Dir &dir, String const &name,
+                               bool create_new_if_dne,
                                JsonObjectCallback const &obj_cb,
                                JsonFileCallback const &malstor_cb,
                                uint8_t nest_limit, size_t buf_limit) {
@@ -34,7 +35,7 @@ JsonManagerResults JsonManager(fs::Dir &dir, String const &name, bool create_new
   } else {
     if (!JsonFile) {
       ESPAPP_DEBUGV("WARNING: Unable to open json file '%s'\n", name.c_str());
-      if (create_new) {
+      if (create_new_if_dne) {
         JsonFile = dir.openFile(name, "w");
       }
     } else {

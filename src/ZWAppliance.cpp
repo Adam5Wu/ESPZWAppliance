@@ -1271,6 +1271,10 @@ Dir Appliance_GetDir(String const &path) {
 	return get_dir(path);
 }
 
+time_t Appliance_CurrentTS() {
+	return GetCurrentTS();
+}
+
 time_t Appliance_UTCTimeofDay(struct tm *tm_out) {
 	time_t Ret = sntp_get_current_timestamp();
 	if (tm_out) localtime_r(&Ret, tm_out);

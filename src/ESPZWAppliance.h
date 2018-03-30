@@ -11,6 +11,7 @@
 #include <ESPAsyncWebServer.h>
 
 Dir Appliance_GetDir(String const &path);
+time_t Appliance_CurrentTS();
 time_t Appliance_UTCTimeofDay(struct tm *tm_out = nullptr);
 time_t Appliance_LocalTimeofDay(struct tm *tm_out = nullptr,
 	TimeChangeRule **tcr = nullptr);

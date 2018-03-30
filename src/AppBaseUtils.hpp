@@ -46,12 +46,12 @@
 #define JSON_MAXIMUM_PARSER_NEST   5
 
 typedef Internals::DynamicJsonBufferBase<BoundedOneshotAllocator>
-	BoundedDynamicJsonBuffer;
+    BoundedDynamicJsonBuffer;
 
 typedef std::function<bool(JsonObject &obj, BoundedDynamicJsonBuffer &buf)>
-	JsonObjectCallback;
+    JsonObjectCallback;
 typedef std::function<bool(fs::File &file)>
-	JsonFileCallback;
+    JsonFileCallback;
 
 typedef enum {
   JSONMAN_OK_READONLY,
@@ -64,7 +64,8 @@ typedef enum {
   JSONMAN_ERR_PARSER,
 } JsonManagerResults;
 
-JsonManagerResults JsonManager(fs::Dir &dir, String const &name, bool create_new,
+JsonManagerResults JsonManager(fs::Dir &dir, String const &name,
+                               bool create_new_if_dne,
                                JsonObjectCallback const &obj_cb,
                                JsonFileCallback const &malstor_cb = JsonFileCallback(),
                                uint8_t nest_limit = JSON_MAXIMUM_PARSER_NEST,
