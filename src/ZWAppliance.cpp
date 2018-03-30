@@ -87,10 +87,10 @@ typedef enum {
 } PortalSteps;
 
 static struct {
-	AppState State;
-	bool NoService;
 	time_t StageTS;
 	time_t StartTS;
+	bool NoService;
+	AppState State;
 
 	AsyncWebServer* webServer;
 	HTTPDigestAccountAuthority* webAccounts;
@@ -116,6 +116,7 @@ static struct {
 			Ticker* apTestTimer;
 			time_t lastAPAvailableTS;
 			bool portalFallback;
+			bool reload;
 		} service;
 	};
 } AppGlobal;
@@ -196,9 +197,12 @@ static time_t FinalizeCurrentState() {
 	time_t curTS = GetCurrentTS();
 	ESPAPP_DEBUG("End of state [%s] (%s)\n", SFPSTR(StrAppState(AppGlobal.State)),
 		ToString(curTS - AppGlobal.StageTS, TimeUnit::SEC, true).c_str());
+
 	time_t StartTS = AppGlobal.StartTS;
+	bool NoService = AppGlobal.NoService;
 	memset(&AppGlobal, 0, sizeof(AppGlobal));
 	AppGlobal.StartTS = StartTS;
+	AppGlobal.NoService = NoService;
 	return curTS;
 }
 
@@ -353,7 +357,7 @@ void setup() {
 	Serial.begin(115200);
 	delay(100);
 	Serial.println();
-	Serial.println(FC("ESP8266 ZWAppliance Core v" APP_VERSION));
+	Serial.println(FC("ESP8266 ZWAppliance Core v" ZWAPP_VERSION));
 
 	// Set a reasonable start time
 	InitBootTime();
@@ -1189,7 +1193,7 @@ static void Service_Start() {
 		if (!__userapp_startup()) {
 			// Fall back to service bypass mode
 			AppGlobal.NoService = true;
-			AppGlobal.wsSteps = PORTAL_SETUP;
+			return;
 		}
 	}
 }
@@ -1201,10 +1205,25 @@ static void loop_SERVICE() {
 		Portal_Start();
 		return;
 	}
-	Portal_WebServer_Operations();
 
-	if (!AppGlobal.NoService)
+	if (!AppGlobal.NoService) {
+		if (AppGlobal.service.reload) {
+			AppGlobal.service.reload = false;
+			__userapp_teardown();
+			if (!__userapp_startup()) {
+				// Fall back to service bypass mode
+				AppGlobal.NoService = true;
+				return;
+			}
+		}
 		__userapp_loop();
+	} else {
+		if (AppGlobal.wsSteps == PORTAL_OFF) {
+			AppGlobal.wsSteps = PORTAL_SETUP;
+		}
+	}
+
+	Portal_WebServer_Operations();
 }
 
 void loop() {
@@ -1252,6 +1271,21 @@ Dir Appliance_GetDir(String const &path) {
 	return get_dir(path);
 }
 
+time_t Appliance_UTCTimeofDay(struct tm *tm_out) {
+	time_t Ret = sntp_get_current_timestamp();
+	if (tm_out) localtime_r(&Ret, tm_out);
+	return Ret;
+}
+
+time_t Appliance_LocalTimeofDay(struct tm *tm_out, TimeChangeRule **tcr) {
+	time_t Ret = sntp_get_current_timestamp();
+	TimeChangeRule* TZ;
+	Ret = AppConfig.TZ.toLocal(Ret, &TZ);
+	if (tcr) *tcr = TZ;
+	if (tm_out) localtime_r(&Ret, tm_out);
+	return Ret;
+}
+
 void Appliance_LoadConfig(String const &filename,
 	std::function<void(JsonObject const &obj)> const &callback) {
 	return load_config(filename, callback);
@@ -1286,6 +1320,10 @@ void Appliance_WebPortal_RespondFileOrBuiltIn(AsyncWebRequest &request,
 File Appliance_WebPortal_CheckRestoreRes(Dir &dir, String const &resfile,
 	PGM_P resdata) {
 	return Portal_WebServer_CheckRestoreRes(dir, resfile, resdata);
+}
+
+void Appliance_Service_Reload() {
+	AppGlobal.service.reload = true;
 }
 
 void Appliance_Device_Restart() {

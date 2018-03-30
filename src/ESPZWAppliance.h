@@ -6,10 +6,14 @@
 
 #include <functional>
 
+#include <Timezone.h>
 #include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 
 Dir Appliance_GetDir(String const &path);
+time_t Appliance_UTCTimeofDay(struct tm *tm_out = nullptr);
+time_t Appliance_LocalTimeofDay(struct tm *tm_out = nullptr,
+	TimeChangeRule **tcr = nullptr);
 
 void Appliance_LoadConfig(String const &filename,
 	std::function<void(JsonObject const &obj)> const &callback);
@@ -24,6 +28,7 @@ void Appliance_WebPortal_RespondFileOrBuiltIn(AsyncWebRequest &request,
 File Appliance_WebPortal_CheckRestoreRes(Dir &dir, String const &resfile,
 	PGM_P resdata);
 
+void Appliance_Service_Reload();
 void Appliance_Device_Restart();
 
 #define setup __userapp_setup

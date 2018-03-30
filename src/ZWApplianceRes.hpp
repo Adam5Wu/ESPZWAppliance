@@ -1,7 +1,7 @@
 #ifndef __PGMRES__
 #define __PGMRES__
 
-#define APP_VERSION   "0.1"
+#define ZWAPP_VERSION   "0.1"
 
 #define CONFIG_DIR            "/config"
 #define APPLIANCE_CONFIG_FILE "appliance.json"

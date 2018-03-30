@@ -43,7 +43,7 @@
 #endif
 
 #define JSON_MAXIMUM_PARSER_BUFFER 2048
-#define JSON_MAXIMUM_PARSER_NEST   2
+#define JSON_MAXIMUM_PARSER_NEST   5
 
 typedef Internals::DynamicJsonBufferBase<BoundedOneshotAllocator>
 	BoundedDynamicJsonBuffer;
