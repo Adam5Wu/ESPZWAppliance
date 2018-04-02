@@ -26,6 +26,7 @@ extern "C" {
 
 #include "AppBaseUtils.hpp"
 #include "ZWApplianceRes.hpp"
+#include "RTCMemory.hpp"
 
 #define WLAN_PORTAL_IP      IPAddress(192, 168, 168, 168)
 // Enable gateway for OS portal detection
@@ -37,12 +38,26 @@ extern "C" {
 #endif
 
 #define PORTAL_SHUTDOWN_DELAY   1
+#define TRIVIAL_FAILURE_DELAY   300   // Seconds within which a service failure is considered "trivial"
+
+#define WIFI_POWER_MAX          20.5
+
+#define POWER_SAVING_NONE       "None"
+#define POWER_SAVING_MODEM      "Modem"
+#define POWER_SAVING_LIGHT      "Light"
+
+#define CONFIG_DEFAULT_POWER_SAVING       WIFI_MODEM_SLEEP
+#define CONFIG_DEFAULT_WIFI_POWER         WIFI_POWER_MAX
 
 #define CONFIG_DEFAULT_HOSTNAME_PFX       "ESP8266-"
 #define CONFIG_DEFAULT_INIT_RETRY_CYCLE   10          // Seconds to wait before retry init steps (AP/NTP) or access point test
 #define CONFIG_DEFAULT_INIT_RETRY_COUNT   6           // Number of retries before fallback to portal mode from init mode
 #define CONFIG_DEFAULT_PORTAL_TIMEOUT     (5 * 60)    // Seconds the web portal is active and idle after enter service mode
 #define CONFIG_DEFAULT_PORTAL_APTEST      30          // Seconds to test access point after entering portal mode and web portal is idle
+
+#define RTC_SLOT_FLAGS		0
+#define RTC_FLAG_BOOTFAIL	0x00000001
+#define RTC_FLAG_RESTORED	0x80000000
 
 typedef enum {
 	APP_STARTUP = 0,
@@ -128,6 +143,11 @@ static time_t GetCurrentTS() {
 }
 
 static struct {
+	bool Production;
+
+	float WiFi_Power;
+	WiFiSleepType PowerSaving;
+
 	String WLAN_AP_Name;
 	String WLAN_AP_Pass;
 	unsigned int Init_Retry_Count;
@@ -223,6 +243,9 @@ static Dir get_dir(String const &path) {
 }
 
 static void init_config_defaults() {
+	AppConfig.Production = false;
+	AppConfig.WiFi_Power = CONFIG_DEFAULT_WIFI_POWER;
+	AppConfig.PowerSaving = CONFIG_DEFAULT_POWER_SAVING;
 	AppConfig.WLAN_AP_Name.clear();
 	AppConfig.WLAN_AP_Pass.clear();
 	AppConfig.Init_Retry_Count = CONFIG_DEFAULT_INIT_RETRY_COUNT;
@@ -287,7 +310,31 @@ static int8_t load_config_timezone(JsonObject const &obj, TimeChangeRule &r) {
 	return -2;
 }
 
+WiFiSleepType load_config_powersaving(String const &spec, WiFiSleepType defval) {
+	if (spec == FC(POWER_SAVING_NONE)) {
+		return WIFI_NONE_SLEEP ;
+	} else if (spec == FC(POWER_SAVING_MODEM)) {
+		return WIFI_MODEM_SLEEP ;
+	} else if (spec == FC(POWER_SAVING_LIGHT)) {
+		return WIFI_LIGHT_SLEEP ;
+	} else {
+		if (spec) {
+			ESPAPP_LOG("WARNING: Invalid power saving specification, "
+				"use default value!\n");
+		}
+		return defval;
+	}
+}
+
 static void load_config_json(JsonObject const &obj) {
+	AppConfig.Production = obj[FC("Production")] | AppConfig.Production;
+	AppConfig.WiFi_Power = obj[FC("WiFi_Power")] | AppConfig.WiFi_Power;
+	if ((AppConfig.WiFi_Power < 0) || (AppConfig.WiFi_Power> WIFI_POWER_MAX)) {
+		ESPAPP_LOG("WARNING: Invalid WiFi output power configuration, "
+			"use default value!\n");
+		AppConfig.WiFi_Power = CONFIG_DEFAULT_WIFI_POWER;
+	}
+	AppConfig.PowerSaving = load_config_powersaving(obj[FC("PowerSaving")], AppConfig.PowerSaving);
 	AppConfig.WLAN_AP_Name = obj[FC("WLAN_AP_Name")] | AppConfig.WLAN_AP_Name.c_str();
 	AppConfig.WLAN_AP_Pass = obj[FC("WLAN_AP_Pass")] | AppConfig.WLAN_AP_Pass.c_str();
 	AppConfig.Init_Retry_Count = obj[FC("Init_Retry_Count")] | AppConfig.Init_Retry_Count;
@@ -301,13 +348,13 @@ static void load_config_json(JsonObject const &obj) {
 		TimeChangeRule TZR, TZD;
 		if (load_config_timezone(obj[FC("TimeZone-Regular")].as<JsonObject&>(), TZR) != 0) {
 			ESPAPP_LOG("WARNING: Failed to parse regular timezone configuration, "
-			"use default timezone!\n");
+				"use default timezone!\n");
 			break;
 		}
 		if (load_config_timezone(obj[FC("TimeZone-Daylight")].as<JsonObject&>(), TZR) != 0) {
 			if (!obj.containsKey(FC("TimeZone-Daylight"))) {
 				ESPAPP_LOG("WARNING: Failed to parse daylight-saving timezone configuration, "
-				"use regular timezone!\n");
+					"use regular timezone!\n");
 			}
 			TZD = TZR;
 		}
@@ -353,6 +400,8 @@ static PGM_P resetReasonToStr(uint32_t reason) {
 	}
 }
 
+uint32_t  RTCFlags;
+
 void setup() {
 	Serial.begin(115200);
 	delay(100);
@@ -371,12 +420,6 @@ void setup() {
 	// Base on boot reason, decide whether we should bypass service
 	ESPAPP_DEBUG("Boot reason: %s\n",
 		SFPSTR(resetReasonToStr(resetInfo.reason)));
-	if ((resetInfo.reason == 1) ||	// Hard WDT
-		(resetInfo.reason == 2) ||	// Fatal Exception
-		(resetInfo.reason == 3)) {	// Soft WDT
-		ESPAPP_DEBUG("WARNING: Service failed in previous boot, bypassing...\n");
-		AppGlobal.NoService = true;
-	}
 
 	ESPAPP_DEBUG("Starting Filesystem...\n");
 	// Two partitions, one primary, one backup
@@ -408,9 +451,10 @@ void setup() {
 	}
 	// Order is important
 	WiFi.persistent(false);
-	if (WiFi.getSleepMode() != WIFI_MODEM_SLEEP) {
-		if (!WiFi.setSleepMode(WIFI_MODEM_SLEEP)) {
-			ESPAPP_LOG("WARNING: Failed to configure WiFi energy saving!\n");
+
+	if (WiFi.getSleepMode() != AppConfig.PowerSaving) {
+		if (!WiFi.setSleepMode(AppConfig.PowerSaving)) {
+			ESPAPP_LOG("WARNING: Failed to configure energy saving!\n");
 		}
 	}
 	if (WiFi.getPhyMode() != WIFI_PHY_MODE_11N) {
@@ -418,7 +462,37 @@ void setup() {
 			ESPAPP_LOG("WARNING: Failed to configure WiFi in 802.11n mode!\n");
 		}
 	}
-	WiFi.setOutputPower(20.5);
+	WiFi.setOutputPower(AppConfig.WiFi_Power);
+
+	RTCMemory &RTCMem = RTCMemory::Manager();
+	if (!RTCMem.Read(RTC_SLOT_FLAGS, &RTCFlags, 1)) {
+		ESPAPP_LOG("WARNING: Failed to load appliance flags from RTC\n");
+		RTCFlags = 0;
+	}
+
+	if ((resetInfo.reason == 1) ||	// Hard WDT
+		(resetInfo.reason == 2) ||	// Fatal Exception
+		(resetInfo.reason == 3)) {	// Soft WDT
+		do {
+			if (AppConfig.Production) {
+				if (!(RTCFlags & RTC_FLAG_BOOTFAIL)) {
+					ESPAPP_LOG("WARNING: Detected non-trivial service failure, resuming...\n");
+					break;
+				}
+				ESPAPP_LOG("WARNING: Detected trivial service failure, bypassing...\n");
+			} else {
+				ESPAPP_DEBUG("WARNING: Service failed in previous boot, bypassing...\n");
+			}
+			AppGlobal.NoService = true;
+		} while(false);
+	}
+
+	ESPAPP_DEBUGV("Marking appliance flags in RTC...\n");
+	RTCFlags |= RTC_FLAG_RESTORED;
+	RTCFlags |= RTC_FLAG_BOOTFAIL;
+	if (!RTCMem.Write(RTC_SLOT_FLAGS, &RTCFlags, 1)) {
+		ESPAPP_DEBUG("WARNING: Failed to update appliance flags to RTC\n");
+	}
 
 	if (!AppGlobal.NoService)
 		__userapp_setup();
@@ -1155,6 +1229,18 @@ static void Service_StartPortal(time_t StartTS) {
 }
 
 static void Service_APMonitor() {
+	time_t Now = GetCurrentTS();
+	if (RTCFlags & RTC_FLAG_BOOTFAIL) {
+		if (Now - AppGlobal.StageTS > TRIVIAL_FAILURE_DELAY) {
+			ESPAPP_DEBUGV("Service seems stable enough, removing trivial failure flag...\n");
+			RTCFlags &= ~RTC_FLAG_BOOTFAIL;
+			RTCMemory &RTCMem = RTCMemory::Manager();
+			if (!RTCMem.Write(RTC_SLOT_FLAGS, &RTCFlags, 1)) {
+				ESPAPP_DEBUG("WARNING: Failed to update appliance flags to RTC\n");
+			}
+		}
+	}
+
 	if (WiFi.status() == WL_CONNECTED) {
 		if (AppGlobal.service.lastAPAvailableTS) {
 			AppGlobal.service.lastAPAvailableTS = 0;
@@ -1162,11 +1248,11 @@ static void Service_APMonitor() {
 		}
 	} else {
 		if (!AppGlobal.service.lastAPAvailableTS) {
-			AppGlobal.service.lastAPAvailableTS = GetCurrentTS();
+			AppGlobal.service.lastAPAvailableTS = Now;
 			ESPAPP_DEBUG("Disconnected from WiFi access point, "
 				"trying to reconnect...\n")
 		} else {
-			time_t BreakSpan = GetCurrentTS() - AppGlobal.service.lastAPAvailableTS;
+			time_t BreakSpan = Now - AppGlobal.service.lastAPAvailableTS;
 			if (BreakSpan && !(BreakSpan % 10)) {
 				ESPAPP_DEBUG("Disconnected from WiFi access point for %s\n",
 				ToString(BreakSpan, TimeUnit::SEC, true).c_str());
