@@ -7,6 +7,7 @@
 
 extern "C" {
 	void tune_timeshift64 (uint64_t now_us);
+	int settimeofday(const struct timeval *, const struct timezone *);
 	extern struct rst_info resetInfo;
 }
 
@@ -55,9 +56,15 @@ extern "C" {
 #define CONFIG_DEFAULT_PORTAL_TIMEOUT     (5 * 60)    // Seconds the web portal is active and idle after enter service mode
 #define CONFIG_DEFAULT_PORTAL_APTEST      30          // Seconds to test access point after entering portal mode and web portal is idle
 
-#define RTC_SLOT_FLAGS		0
-#define RTC_FLAG_BOOTFAIL	0x00000001
-#define RTC_FLAG_RESTORED	0x80000000
+#define RTC_SLOTS_RESERVED      8
+
+#define RTC_SLOT_FLAGS          0
+#define RTC_FLAG_BOOTFAIL       0x00000001
+#define RTC_FLAG_TIMESYNC       0x00000002
+#define RTC_FLAG_RESTORED       0x80000000
+
+#define RTC_SLOT_LASTKNOWNTS    1
+#define RTC_CLOCKUPDATE         15  // Update RTC last known clock every 10 seconds
 
 typedef enum {
 	APP_STARTUP = 0,
@@ -135,6 +142,9 @@ static struct {
 		} service;
 	};
 } AppGlobal;
+
+static uint32_t RTCFlags;
+Ticker RTCClockUpdate;
 
 static time_t GetCurrentTS() {
 	struct timeval TV;
@@ -310,7 +320,7 @@ static int8_t load_config_timezone(JsonObject const &obj, TimeChangeRule &r) {
 	return -2;
 }
 
-WiFiSleepType load_config_powersaving(String const &spec, WiFiSleepType defval) {
+static WiFiSleepType load_config_powersaving(String const &spec, WiFiSleepType defval) {
 	if (spec == FC(POWER_SAVING_NONE)) {
 		return WIFI_NONE_SLEEP ;
 	} else if (spec == FC(POWER_SAVING_MODEM)) {
@@ -362,21 +372,38 @@ static void load_config_json(JsonObject const &obj) {
 	} while (false);
 }
 
-void load_config(String const &filename, std::function<void(JsonObject const &obj)> const &load_cb) {
+static JsonManagerResults load_config(String const &filename,
+	std::function<void(JsonObject const &obj)> const &load_cb) {
 	auto ConfigDir = get_dir(FC(CONFIG_DIR));
-	if (JsonManager(ConfigDir, filename, true,
+	return JsonManager(ConfigDir, filename, true,
 		[&](JsonObject &obj, BoundedDynamicJsonBuffer &parsebuf) {
 			load_cb(obj);
 			return false;
 		}, [&](File &file) {
 			return file.truncate(0);
-		}) >= JSONMAN_ERR) {
-		ESPAPP_LOG("ERROR: Error processing configuration file '%s'\n", filename.c_str());
-		panic();
-	}
+		});
 }
 
-static void InitBootTime() {
+static JsonManagerResults update_config(String const &filename,
+	JsonObjectCallback const &update_cb) {
+	auto ConfigDir = get_dir(FC(CONFIG_DIR));
+	return JsonManager(ConfigDir, filename, true, update_cb, [&](File &file) {
+		return file.truncate(0);
+	});
+}
+
+static void InitBootTime(RTCMemory &RTCMem) {
+	time_t baseTime;
+	if (RTCFlags & RTC_FLAG_TIMESYNC) {
+		if (RTCMem.Read(RTC_SLOT_LASTKNOWNTS, (uint32_t*)&baseTime, 1)) {
+			// Restore SNTP clock, not exactly accurate, but good enough
+			struct timeval tv = { baseTime, 0 };
+			settimeofday(&tv, nullptr);
+			return;
+		}
+		ESPAPP_DEBUG("WARNING: Error loading last known time from RTC\n");
+		RTCFlags &= ~RTC_FLAG_TIMESYNC;
+	}
 	struct tm BootTM;
 	BootTM.tm_year = 2018 - 1900;
 	BootTM.tm_mon = 0;
@@ -384,7 +411,8 @@ static void InitBootTime() {
 	BootTM.tm_hour = 0;
 	BootTM.tm_min = 0;
 	BootTM.tm_sec = 0;
-	tune_timeshift64(mktime(&BootTM) * 1000000ull);
+	baseTime= mktime(&BootTM);
+	tune_timeshift64(baseTime * 1000000ull);
 }
 
 static PGM_P resetReasonToStr(uint32_t reason) {
@@ -400,17 +428,29 @@ static PGM_P resetReasonToStr(uint32_t reason) {
 	}
 }
 
-uint32_t  RTCFlags;
-
 void setup() {
 	Serial.begin(115200);
 	delay(100);
 	Serial.println();
 	Serial.println(FC("ESP8266 ZWAppliance Core v" ZWAPP_VERSION));
 
-	// Set a reasonable start time
-	InitBootTime();
+	// Initialize/check RTC memory
+	RTCMemory &RTCMem = RTCMemory::Manager();
+	if (!RTCMem.Read(RTC_SLOT_FLAGS, &RTCFlags, 1)) {
+		ESPAPP_LOG("WARNING: Failed to load appliance flags from RTC\n");
+		RTCFlags = 0;
+	}
 
+	ESPAPP_DEBUGV("Marking appliance flags in RTC...\n");
+	uint32_t BootRTCFlags = RTCFlags | RTC_FLAG_RESTORED | RTC_FLAG_BOOTFAIL;
+	if (!RTCMem.Write(RTC_SLOT_FLAGS, &BootRTCFlags, 1)) {
+		ESPAPP_DEBUG("WARNING: Failed to update appliance flags to RTC\n");
+	}
+
+	// Set a reasonable start time
+	InitBootTime(RTCMem);
+
+	// Initialize global states
 	memset(&AppGlobal, 0, sizeof(AppGlobal));
 	//AppGlobal.State = APP_STARTUP;
 	AppGlobal.StartTS = GetCurrentTS();
@@ -438,7 +478,10 @@ void setup() {
 
 	ESPAPP_DEBUG("Loading Configurations...\n");
 	init_config_defaults();
-	load_config(APPLIANCE_CONFIG_FILE, load_config_json);
+	if (load_config(APPLIANCE_CONFIG_FILE, load_config_json) >= JSONMAN_ERR) {
+		ESPAPP_LOG("ERROR: Error loading appliance configuration file\n");
+		panic();
+	}
 
 	ESPAPP_DEBUG("Initializing WiFi...\n");
 	if (WiFi.getMode() != WIFI_OFF) {
@@ -464,12 +507,6 @@ void setup() {
 	}
 	WiFi.setOutputPower(AppConfig.WiFi_Power);
 
-	RTCMemory &RTCMem = RTCMemory::Manager();
-	if (!RTCMem.Read(RTC_SLOT_FLAGS, &RTCFlags, 1)) {
-		ESPAPP_LOG("WARNING: Failed to load appliance flags from RTC\n");
-		RTCFlags = 0;
-	}
-
 	if ((resetInfo.reason == 1) ||	// Hard WDT
 		(resetInfo.reason == 2) ||	// Fatal Exception
 		(resetInfo.reason == 3)) {	// Soft WDT
@@ -485,13 +522,6 @@ void setup() {
 			}
 			AppGlobal.NoService = true;
 		} while(false);
-	}
-
-	ESPAPP_DEBUGV("Marking appliance flags in RTC...\n");
-	RTCFlags |= RTC_FLAG_RESTORED;
-	RTCFlags |= RTC_FLAG_BOOTFAIL;
-	if (!RTCMem.Write(RTC_SLOT_FLAGS, &RTCFlags, 1)) {
-		ESPAPP_DEBUG("WARNING: Failed to update appliance flags to RTC\n");
 	}
 
 	if (!AppGlobal.NoService)
@@ -550,6 +580,21 @@ static void Init_TimeoutTrigger() {
 	AppGlobal.init.steps = INIT_FAIL;
 }
 
+static void updateRTCClock() {
+	time_t curTS = GetCurrentTS();
+	RTCMemory &RTCMem = RTCMemory::Manager();
+	if (RTCMem.Write(RTC_SLOT_LASTKNOWNTS, (uint32_t*)&curTS, 1)) {
+		if (!(RTCFlags & RTC_FLAG_TIMESYNC)) {
+			RTCFlags |= RTC_FLAG_TIMESYNC;
+			if (!RTCMem.Write(RTC_SLOT_FLAGS, &RTCFlags, 1)) {
+				ESPAPP_DEBUG("WARNING: Failed to update appliance flags to RTC\n");
+			}
+		}
+	} else {
+		ESPAPP_DEBUG("WARNING: Failed to update last known time to RTC\n");
+	}
+}
+
 static void loop_INIT() {
 	switch (AppGlobal.init.steps) {
 		case INIT_STA_CONNECT: {
@@ -600,39 +645,62 @@ static void loop_INIT() {
 
 		case INIT_NTP_SETUP: {
 			if (AppConfig.NTP_Server) {
-				time_t curTS = sntp_get_current_timestamp();
-				if (curTS < AppGlobal.init.lastKnownTS) {
-					AppGlobal.init.lastKnownTS = GetCurrentTS();
-					time_t ConnectSpan = AppGlobal.init.lastKnownTS - AppGlobal.init.cycleTS;
-					if (ConnectSpan < AppConfig.Init_Retry_Cycle) {
-						ESPAPP_DEBUGVVDO({
-							time_t cycleSpan = AppConfig.Init_Retry_Cycle - ConnectSpan;
-							if (cycleSpan != AppGlobal.init.cycleSpan) {
-								AppGlobal.init.cycleSpan = cycleSpan;
-								ESPAPP_LOG("Waiting for NTP synchronization... "
-									"(%s to next retry)\n",
-									ToString(cycleSpan, TimeUnit::SEC, true).c_str());
-							}
-						});
-						delay(100);
+				if (!(RTCFlags & RTC_FLAG_TIMESYNC)) {
+					time_t curTS = sntp_get_current_timestamp();
+					if (curTS < AppGlobal.init.lastKnownTS) {
+						AppGlobal.init.lastKnownTS = GetCurrentTS();
+						time_t ConnectSpan = AppGlobal.init.lastKnownTS - AppGlobal.init.cycleTS;
+						if (ConnectSpan < AppConfig.Init_Retry_Cycle) {
+							ESPAPP_DEBUGVVDO({
+								time_t cycleSpan = AppConfig.Init_Retry_Cycle - ConnectSpan;
+								if (cycleSpan != AppGlobal.init.cycleSpan) {
+									AppGlobal.init.cycleSpan = cycleSpan;
+									ESPAPP_LOG("Waiting for NTP synchronization... "
+										"(%s to next retry)\n",
+										ToString(cycleSpan, TimeUnit::SEC, true).c_str());
+								}
+							});
+							delay(100);
+							break;
+						}
+						if (++AppGlobal.init.cycleCount < AppConfig.Init_Retry_Count) {
+							ESPAPP_DEBUGV("NTP synchronization timeout, retrying... "
+								"(%d retries left)\n",
+								AppConfig.Init_Retry_Count - AppGlobal.init.cycleCount);
+							Init_NTP_Sync();
+						} else Init_TimeoutTrigger();
 						break;
 					}
-					if (++AppGlobal.init.cycleCount < AppConfig.Init_Retry_Count) {
-						ESPAPP_DEBUGV("NTP synchronization timeout, retrying... "
-							"(%d retries left)\n",
-							AppConfig.Init_Retry_Count - AppGlobal.init.cycleCount);
-						Init_NTP_Sync();
-					} else Init_TimeoutTrigger();
-					break;
+					ESPAPP_LOG("NTP time synchronized @%s\n", PrintTime(curTS).c_str());
+					// Update RTC with syncrhonized time
+					RTCMemory &RTCMem = RTCMemory::Manager();
+					if (RTCMem.Write(RTC_SLOT_LASTKNOWNTS, (uint32_t*)&curTS, 1)) {
+						RTCFlags |= RTC_FLAG_TIMESYNC;
+						if (!RTCMem.Write(RTC_SLOT_FLAGS, &RTCFlags, 1)) {
+							ESPAPP_DEBUG("WARNING: Failed to update appliance flags to RTC\n");
+						}
+					} else {
+						ESPAPP_DEBUG("WARNING: Failed to update last known time to RTC\n");
+					}
+					// Update the stage timestamp
+					time_t StageTime = AppGlobal.init.lastKnownTS - AppGlobal.StageTS;
+					AppGlobal.StageTS = curTS - StageTime;
+					// Update the boot timestamp
+					time_t UpTime = AppGlobal.init.lastKnownTS - AppGlobal.StartTS;
+					ESPAPP_DEBUG("Uptime: %s\n", ToString(UpTime, TimeUnit::SEC, true).c_str());
+					AppGlobal.StartTS = curTS - UpTime;
+				} else {
+					// We have a pretty good time reference, no need to wait
+					time_t curTS = AppGlobal.init.lastKnownTS;
+					// Let SNTP continue to work in the background
+					ESPAPP_LOG("NTP background synchronizing @%s\n", PrintTime(curTS).c_str());
+					time_t UpTime = curTS - AppGlobal.StartTS;
+					ESPAPP_DEBUG("Uptime: %s\n", ToString(UpTime, TimeUnit::SEC, true).c_str());
 				}
-				ESPAPP_LOG("NTP time synchronized @%s\n", PrintTime(curTS).c_str());
-				// Update the stage timestamp
-				time_t StageTime = AppGlobal.init.lastKnownTS - AppGlobal.StageTS;
-				AppGlobal.StageTS = curTS - StageTime;
-				// Update the boot timestamp
-				time_t UpTime = AppGlobal.init.lastKnownTS - AppGlobal.StartTS;
-				ESPAPP_DEBUG("Uptime: %s\n", ToString(UpTime, TimeUnit::SEC, true).c_str());
-				AppGlobal.StartTS = curTS - UpTime;
+				// Schedule automatic RTC updates
+				if (!RTCClockUpdate.active()) {
+					RTCClockUpdate.attach(RTC_CLOCKUPDATE, updateRTCClock);
+				}
 			} else {
 				ESPAPP_DEBUG("NTP server not configured, synchronization skipped\n");
 			}
@@ -1200,6 +1268,8 @@ static void perform_DevReset() {
 static void perform_DevRestart() {
 	ESPAPP_DEBUG("Unmounting file system...\n");
 	VFATFS.end();
+	ESPAPP_DEBUG("Saving clock to RTC...\n");
+	updateRTCClock();
 	ESPAPP_LOG("Restarting device...\n");
 	ESP.restart();
 	// Should not reach!
@@ -1376,9 +1446,32 @@ time_t Appliance_LocalTimeofDay(struct tm *tm_out, TimeChangeRule **tcr) {
 	return Ret;
 }
 
-void Appliance_LoadConfig(String const &filename,
+JsonManagerResults Appliance_LoadConfig(String const &filename,
 	std::function<void(JsonObject const &obj)> const &callback) {
 	return load_config(filename, callback);
+}
+
+JsonManagerResults Appliance_UpdateConfig(String const &filename,
+	JsonObjectCallback const &callback) {
+	return update_config(filename, callback);
+}
+
+bool Appliance_RTCMemory_isRestored() {
+	return RTCFlags & RTC_FLAG_RESTORED;
+}
+
+uint8_t Appliance_RTCMemory_Available() {
+	return RTCMEMORY_USERSLOTS - RTC_SLOTS_RESERVED;
+}
+
+bool Appliance_RTCMemory_Read(uint8_t offset, uint32_t *buf, uint8_t count) {
+	RTCMemory &RTCMem = RTCMemory::Manager();
+	return RTCMem.Read(RTC_SLOTS_RESERVED+offset, buf, count);
+}
+
+bool Appliance_RTCMemory_Write(uint8_t offset, uint32_t *buf, uint8_t count) {
+	RTCMemory &RTCMem = RTCMemory::Manager();
+	return RTCMem.Write(RTC_SLOTS_RESERVED+offset, buf, count);
 }
 
 AsyncWebServer* Appliance_WebPortal() {

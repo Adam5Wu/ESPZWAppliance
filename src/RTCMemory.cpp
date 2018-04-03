@@ -10,7 +10,7 @@ RTCMemory::RTCMemory() {
 	uint8_t sig[MD5_BINLEN];
 	calcMD5(_rtcData.data, sizeof(_rtcData.data), sig);
 	if (memcmp(sig, _rtcData.sig, MD5_BINLEN) != 0) {
-		ESPAPPRTCM_DEBUG("RTC memory signature invalid\n");
+		ESPAPPRTCM_DEBUG("WARNING: RTC memory signature invalid\n");
 		memset(_rtcData.data, 0, sizeof(_rtcData.data));
 		calcMD5(_rtcData.data, sizeof(_rtcData.data), _rtcData.sig);
 		ESPAPPRTCM_DEBUGV("Initializing RTC memory...\n");
@@ -19,7 +19,7 @@ RTCMemory::RTCMemory() {
 			panic();
 		}
 	} else {
-		ESPAPPRTCM_DEBUGVV("RTC memory signature valid\n");
+		ESPAPPRTCM_DEBUGV("RTC memory signature valid\n");
 	}
 }
 

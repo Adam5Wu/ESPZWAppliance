@@ -10,14 +10,23 @@
 #include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 
+#include "AppBaseUtils.hpp"
+
 Dir Appliance_GetDir(String const &path);
 time_t Appliance_CurrentTS();
 time_t Appliance_UTCTimeofDay(struct tm *tm_out = nullptr);
 time_t Appliance_LocalTimeofDay(struct tm *tm_out = nullptr,
 	TimeChangeRule **tcr = nullptr);
 
-void Appliance_LoadConfig(String const &filename,
+JsonManagerResults Appliance_LoadConfig(String const &filename,
 	std::function<void(JsonObject const &obj)> const &callback);
+JsonManagerResults Appliance_UpdateConfig(String const &filename,
+	JsonObjectCallback const &callback);
+
+bool Appliance_RTCMemory_isRestored();
+uint8_t Appliance_RTCMemory_Available();
+bool Appliance_RTCMemory_Read(uint8_t offset, uint32_t *buf, uint8_t count);
+bool Appliance_RTCMemory_Write(uint8_t offset, uint32_t *buf, uint8_t count);
 
 AsyncWebServer* Appliance_WebPortal();
 void Appliance_WebPortal_TimedStart();
