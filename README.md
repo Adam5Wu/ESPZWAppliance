@@ -61,7 +61,7 @@ when connected to triggers automatic browser display of the main index Webpage
 	* Hostname and hosted AP name
 	* Optional NTP server to sync with when connected to access point
 	* Optional timezone with daylight-saving support
-* Built-in support for Web OTA
+* Built-in support for authenticated Web OTA
 * Built-in mechanism for Web authentication and access control
 	* (WIP) Create / modify / remove users and passwords
 	* (WIP) Define custom access control rules
