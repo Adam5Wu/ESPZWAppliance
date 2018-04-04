@@ -70,6 +70,11 @@ when connected to triggers automatic browser display of the main index Webpage
 	* Authenticated HTTP GET/PUT/DELETE access to the whole file system
 	* (WIP) Authenticated WebDAV access to the whole file system
 * (WIP) Provides whole file system backup and restore (via storage partitioning)
+* Wrapped APIs for easier user service implementation
+	* RTC memory accesses
+	* Configuration loading and saving
+* Monitors and detects user service crashes
+	* Configurable recovery mode, provide ability to recover from boot-loop
 * More to come!
 
 ## How to use
