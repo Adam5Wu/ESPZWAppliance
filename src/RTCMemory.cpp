@@ -6,7 +6,10 @@ RTCMemory::RTCMemory() {
 	RTCDATA _rtcData;
 #endif
 	ESPAPPRTCM_DEBUGVV("Loading RTC memory...\n");
-	ESP.rtcUserMemoryRead(0, (uint32_t*)&_rtcData, RTCMEMORY_MAXLEN);
+	if (!ESP.rtcUserMemoryRead(RTCMEMORY_ARDUINORSV, (uint32_t*)&_rtcData, sizeof(RTCDATA))) {
+		ESPAPPRTCM_DEBUG("ERROR: Failed to load RTC memory\n");
+		panic();
+	}
 	uint8_t sig[MD5_BINLEN];
 	calcMD5(_rtcData.data, sizeof(_rtcData.data), sig);
 	if (memcmp(sig, _rtcData.sig, MD5_BINLEN) != 0) {
@@ -14,7 +17,7 @@ RTCMemory::RTCMemory() {
 		memset(_rtcData.data, 0, sizeof(_rtcData.data));
 		calcMD5(_rtcData.data, sizeof(_rtcData.data), _rtcData.sig);
 		ESPAPPRTCM_DEBUGV("Initializing RTC memory...\n");
-		if (!ESP.rtcUserMemoryWrite(0, (uint32_t*)&_rtcData, RTCMEMORY_MAXLEN)) {
+		if (!ESP.rtcUserMemoryWrite(RTCMEMORY_ARDUINORSV, (uint32_t*)&_rtcData, sizeof(RTCDATA))) {
 			ESPAPPRTCM_DEBUG("ERROR: Failed to initialize RTC memory\n");
 			panic();
 		}
@@ -58,13 +61,13 @@ bool RTCMemory::Write(uint8_t offset, uint32_t const *buf, uint8_t count) {
 		return false;
 	}
 	ESPAPPRTCM_DEBUGVV("Updating RTC memory signature...\n");
-	if (!ESP.rtcUserMemoryWrite(0, _rtcData.sig, MD5_BINLEN)) {
+	if (!ESP.rtcUserMemoryWrite(RTCMEMORY_ARDUINORSV, _rtcData.sig, MD5_BINLEN)) {
 		ESPAPPRTCM_DEBUG("ERROR: Failed to update RTC memory signature\n");
 		panic();
 	}
 #else
 	ESPAPPRTCM_DEBUGVV("Updating RTC memory...\n");
-	if (!ESP.rtcUserMemoryWrite(0, (uint32_t*)&_rtcData, RTCMEMORY_MAXLEN)) {
+	if (!ESP.rtcUserMemoryWrite(RTCMEMORY_ARDUINORSV, (uint32_t*)&_rtcData, sizeof(RTCDATA))) {
 		ESPAPPRTCM_DEBUG("ERROR: Failed to update RTC memory\n");
 		panic();
 	}

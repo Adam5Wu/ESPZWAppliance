@@ -1,6 +1,8 @@
 #ifndef __RTCMEMORY_H__
 #define __RTCMEMORY_H__
 
+#include <eboot_command.h>
+
 #include <Misc.h>
 
 #include "AppBaseUtils.hpp"
@@ -51,7 +53,9 @@
 #endif
 
 #define RTCMEMORY_TOTALSLOTS  (RTCMEMORY_MAXLEN/4)
-#define RTCMEMORY_USERSLOTS   ((RTCMEMORY_MAXLEN-MD5_BINLEN)/4)
+#define RTCMEMORY_ARDUINORSV  (sizeof(struct eboot_command)/4)
+#define RTCMEMORY_ACCESSSLOTS (RTCMEMORY_TOTALSLOTS-RTCMEMORY_ARDUINORSV)
+#define RTCMEMORY_USERSLOTS   (RTCMEMORY_ACCESSSLOTS-(MD5_BINLEN/4))
 #define RTCMEMORY_USERSTART   (RTCMEMORY_TOTALSLOTS-RTCMEMORY_USERSLOTS)
 
 class RTCMemory {
