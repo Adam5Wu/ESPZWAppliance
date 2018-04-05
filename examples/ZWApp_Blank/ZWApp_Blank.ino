@@ -23,18 +23,21 @@ void setup() {
   // This function is invoked once at the end of ZWAppliance setup.
   // The following has already been configured:
   // - Serial: 115200
-  // - vFATFS: mounted
+  // - vFATFS: partition 0 mounted
   // - WiFi: non-presistent, 802.11n, light-sleep, max-power
-  // - Time: Initialized to UTC 00:00:00 January 1, 2018
+  // - Time: Initialized to UTC 00:00:00 January 1, 2018, or
+  //         approximately current time if time was synced before restart
   // - Timezone: loaded from configuration, or default UTC
 }
 
-void startup() {
+bool startup() {
   // This function is invoked each time ZWAppliance enters service mode.
   // The following condition(s) has been reached:
   // - WiFi: Connected to configured access point
   // - Time: Synchronized with NTP server if configured (default not)
   // - WebPortal: Started if idle timeout configured (default 5min)
+  // If return is false, appliance enters service bypass mode, and would
+  //   not call startup/loop/teardown anymore (until next restart)
 }
 
 void loop() {
