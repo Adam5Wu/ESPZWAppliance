@@ -42,13 +42,15 @@ extern "C" {
 #define TRIVIAL_FAILURE_DELAY   300   // Seconds within which a service failure is considered "trivial"
 
 #define WIFI_POWER_MAX          20.5
+#define WIFI_POWER_MEDIUM       10.25
+#define WIFI_POWER_MINIMUM      0
 
 #define POWER_SAVING_NONE       "None"
 #define POWER_SAVING_MODEM      "Modem"
 #define POWER_SAVING_LIGHT      "Light"
 
 #define CONFIG_DEFAULT_POWER_SAVING       WIFI_MODEM_SLEEP
-#define CONFIG_DEFAULT_WIFI_POWER         WIFI_POWER_MAX
+#define CONFIG_DEFAULT_WIFI_POWER         WIFI_POWER_MEDIUM
 
 #define CONFIG_DEFAULT_HOSTNAME_PFX       "ESP8266-"
 #define CONFIG_DEFAULT_INIT_RETRY_CYCLE   10          // Seconds to wait before retry init steps (AP/NTP) or access point test
@@ -549,7 +551,7 @@ static void Init_Start() {
 		WiFi.setAutoReconnect(false);
 	}
 	auto hostname = WiFi.hostname();
-	if (hostname == AppConfig.Hostname) {
+	if (hostname != AppConfig.Hostname) {
 		WiFi.hostname(AppConfig.Hostname.c_str());
 	}
 
