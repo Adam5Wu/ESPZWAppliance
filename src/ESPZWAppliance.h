@@ -42,6 +42,7 @@ void Appliance_Service_Reload();
 void Appliance_Device_Restart();
 
 #define setup __userapp_setup
+#define prestart_loop __userapp_prestart_loop
 #define startup __userapp_startup
 #define teardown __userapp_teardown
 #define loop __userapp_loop

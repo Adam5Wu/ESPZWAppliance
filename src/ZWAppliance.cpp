@@ -156,9 +156,10 @@ static time_t GetCurrentTS() {
 
 static struct {
 	bool Production;
+	bool PersistWLAN;
 
-	float WiFi_Power;
 	WiFiSleepType PowerSaving;
+	float WiFi_Power;
 
 	String WLAN_AP_Name;
 	String WLAN_AP_Pass;
@@ -186,6 +187,7 @@ static String PrintTime(time_t ts) {
 static void Portal_Stop();
 
 extern void __userapp_setup();
+extern void __userapp_prestart_loop();
 extern bool __userapp_startup();
 extern void __userapp_loop();
 extern void __userapp_teardown();
@@ -222,7 +224,7 @@ static time_t FinalizeCurrentState() {
 			break;
 
 		default:
-			ESPAPP_LOG("Unrecognized state (%d)\n", (int)AppGlobal.State);
+			ESPAPP_LOG("Unrecognised state (%d)\n", (int)AppGlobal.State);
 			panic();
 	}
 	Portal_Stop();
@@ -256,8 +258,9 @@ static Dir get_dir(String const &path) {
 
 static void init_config_defaults() {
 	AppConfig.Production = false;
-	AppConfig.WiFi_Power = CONFIG_DEFAULT_WIFI_POWER;
+	AppConfig.PersistWLAN = true;
 	AppConfig.PowerSaving = CONFIG_DEFAULT_POWER_SAVING;
+	AppConfig.WiFi_Power = CONFIG_DEFAULT_WIFI_POWER;
 	AppConfig.WLAN_AP_Name.clear();
 	AppConfig.WLAN_AP_Pass.clear();
 	AppConfig.Init_Retry_Count = CONFIG_DEFAULT_INIT_RETRY_COUNT;
@@ -340,20 +343,25 @@ static WiFiSleepType load_config_powersaving(String const &spec, WiFiSleepType d
 
 static void load_config_json(JsonObject const &obj) {
 	AppConfig.Production = obj[FC("Production")] | AppConfig.Production;
+	AppConfig.PersistWLAN = obj[FC("PersistWLAN")] | AppConfig.PersistWLAN;
+
+	AppConfig.PowerSaving = load_config_powersaving(obj[FC("PowerSaving")], AppConfig.PowerSaving);
 	AppConfig.WiFi_Power = obj[FC("WiFi_Power")] | AppConfig.WiFi_Power;
 	if ((AppConfig.WiFi_Power < 0) || (AppConfig.WiFi_Power> WIFI_POWER_MAX)) {
 		ESPAPP_LOG("WARNING: Invalid WiFi output power configuration, "
 			"use default value!\n");
 		AppConfig.WiFi_Power = CONFIG_DEFAULT_WIFI_POWER;
 	}
-	AppConfig.PowerSaving = load_config_powersaving(obj[FC("PowerSaving")], AppConfig.PowerSaving);
+
 	AppConfig.WLAN_AP_Name = obj[FC("WLAN_AP_Name")] | AppConfig.WLAN_AP_Name.c_str();
 	AppConfig.WLAN_AP_Pass = obj[FC("WLAN_AP_Pass")] | AppConfig.WLAN_AP_Pass.c_str();
 	AppConfig.Init_Retry_Count = obj[FC("Init_Retry_Count")] | AppConfig.Init_Retry_Count;
 	AppConfig.Init_Retry_Cycle = obj[FC("Init_Retry_Cycle")] | AppConfig.Init_Retry_Cycle;
+
 	AppConfig.Hostname = obj[FC("Hostname")] | AppConfig.Hostname.c_str();
 	AppConfig.Portal_Timeout = obj[FC("Portal_Timeout")] | AppConfig.Portal_Timeout;
 	AppConfig.Portal_APTest = obj[FC("Portal_APTest")] | AppConfig.Portal_APTest;
+
 	AppConfig.NTP_Server = obj[FC("NTP_Server")] | AppConfig.NTP_Server.c_str();
 	do {
 		// Load timezone configurations
@@ -486,16 +494,18 @@ void setup() {
 	}
 
 	ESPAPP_DEBUG("Initializing WiFi...\n");
-	if (WiFi.getMode() != WIFI_OFF) {
-		if (!WiFi.mode(WIFI_OFF)) {
-			ESPAPP_LOG("WARNING: Failed to disable WiFi!\n");
+	if (!AppConfig.PersistWLAN) {
+		if (WiFi.getMode() != WIFI_OFF) {
+			if (!WiFi.mode(WIFI_OFF)) {
+				ESPAPP_LOG("WARNING: Failed to disable WiFi!\n");
+			}
 		}
+		// Order is important
+		WiFi.persistent(false);
 	}
-	if (WiFi.getAutoConnect()) {
-		WiFi.setAutoConnect(false);
+	if (WiFi.getAutoConnect() != AppConfig.PersistWLAN) {
+		WiFi.setAutoConnect(AppConfig.PersistWLAN);
 	}
-	// Order is important
-	WiFi.persistent(false);
 
 	if (WiFi.getSleepMode() != AppConfig.PowerSaving) {
 		if (!WiFi.setSleepMode(AppConfig.PowerSaving)) {
@@ -535,26 +545,27 @@ static void Init_WLAN_Connect() {
 	if (WiFi.begin(AppConfig.WLAN_AP_Name.c_str(), AppConfig.WLAN_AP_Pass.c_str())
 		== WL_CONNECT_FAILED) {
 		ESPAPP_LOG("WARNING: Failed to initialize WiFi client!\n");
+		AppGlobal.init.steps = INIT_FAIL;
 	}
-	delay(200);
+	delay(100);
 }
 
 static void Init_Start() {
 	SwitchState(APP_INIT);
-	ESPAPP_LOG("Connecting to WiFi station '%s'...\n",
-		AppConfig.WLAN_AP_Name.c_str());
+	if (AppConfig.PersistWLAN) {
+		WiFi.persistent(true);
+	}
 	if (!WiFi.mode(WIFI_STA)) {
 		ESPAPP_LOG("ERROR: Failed to switch to WiFi client mode!\n");
 		panic();
-	}
-	if (WiFi.getAutoReconnect()) {
-		WiFi.setAutoReconnect(false);
 	}
 	auto hostname = WiFi.hostname();
 	if (hostname != AppConfig.Hostname) {
 		WiFi.hostname(AppConfig.Hostname.c_str());
 	}
 
+	ESPAPP_LOG("Connecting to WiFi station '%s'...\n",
+		AppConfig.WLAN_AP_Name.c_str());
 	Init_WLAN_Connect();
 	//AppGlobal.init.steps = INIT_STA_CONNECT;
 }
@@ -565,7 +576,7 @@ static void Service_Start();
 static void Init_NTP_Sync() {
 	AppGlobal.init.cycleTS = AppGlobal.init.lastKnownTS = GetCurrentTS();
 	configTime(0, 0, AppConfig.NTP_Server.c_str());
-	delay(200);
+	delay(100);
 }
 
 static void Init_NTP() {
@@ -609,7 +620,6 @@ static void loop_INIT() {
 					break;
 
 				case STATION_GOT_IP:
-					WiFi.setAutoReconnect(true);
 					ESPAPP_DEBUG("Connected to WiFi access point '%s'\n",
 						AppConfig.WLAN_AP_Name.c_str());
 					ESPAPP_LOG("IP address: %s\n", WiFi.localIP().toString().c_str());
@@ -634,12 +644,17 @@ static void loop_INIT() {
 						break;
 					}
 					if (++AppGlobal.init.cycleCount < AppConfig.Init_Retry_Count) {
-						WiFi.disconnect(false);
 						ESPAPP_DEBUGV("WiFi access point connect timeout, retrying... "
 							"(%d retries left)\n",
 							AppConfig.Init_Retry_Count - AppGlobal.init.cycleCount);
-						delay(100);
-						Init_WLAN_Connect();
+						if (AppConfig.PersistWLAN) {
+							WiFi.reconnect();
+							delay(100);
+						} else {
+							WiFi.disconnect(false);
+							delay(100);
+							Init_WLAN_Connect();
+						}
 					} else Init_TimeoutTrigger();
 				}
 			}
@@ -711,13 +726,16 @@ static void loop_INIT() {
 
 		case INIT_FAIL: {
 			ESPAPP_LOG("WiFi network initialization failed!\n");
+			if (AppConfig.PersistWLAN) {
+				WiFi.persistent(false);
+			}
 			WiFi.disconnect(true);
 			delay(100);
 			Portal_Start();
 		} break;
 
 		default: {
-			ESPAPP_LOG("ERROR: Unrecognized init step (%d)\n",
+			ESPAPP_LOG("ERROR: Unrecognised init step (%d)\n",
 				(int)AppGlobal.init.steps);
 			panic();
 		}
@@ -1062,7 +1080,7 @@ static void Portal_WebServer_Operations() {
 			break;
 
 		default: {
-			ESPAPP_LOG("ERROR: Unrecognized portal step (%d)\n",
+			ESPAPP_LOG("ERROR: Unrecognised portal step (%d)\n",
 				(int)AppGlobal.wsSteps);
 			panic();
 		}
@@ -1152,6 +1170,9 @@ static void Portal_DNS_SendReply(DNSHeader *header, AsyncUDPPacket &packet) {
 
 static void Portal_Start() {
 	SwitchState(APP_PORTAL);
+	if (AppConfig.PersistWLAN) {
+		WiFi.persistent(false);
+	}
 	if (!WiFi.mode(WIFI_AP)) {
 		ESPAPP_LOG("ERROR: Failed to switch to WiFi base station mode!\n");
 		panic();
@@ -1222,7 +1243,9 @@ static void Portal_APTest() {
 		AppConfig.WLAN_AP_Name.c_str());
 	time_t startTS = GetCurrentTS();
 	do {
-		delay(500);
+		delay(100);
+		// We are taking a long time off the main loop, need to invoke user app loop separately
+		__userapp_prestart_loop();
 		station_status_t WifiStatus = wifi_station_get_connect_status();
 		switch (WifiStatus) {
 			case STATION_WRONG_PASSWORD:
@@ -1241,11 +1264,11 @@ static void Portal_APTest() {
 	} while (GetCurrentTS() - startTS < AppConfig.Init_Retry_Cycle);
 
 	WiFi.disconnect(false);
-	delay(100);
+	delay(50);
 	WiFi.enableSTA(false);
 	if (AppGlobal.portal.performAPTest) {
 		// Retry init stage now
-		delay(100);
+		delay(50);
 		Init_Start();
 	} else {
 		ESPAPP_DEBUG("Unable to connect to WiFi access point '%s'\n",
@@ -1416,8 +1439,11 @@ void loop() {
 			break;
 
 		default:
-			ESPAPP_LOG("ERROR: Unrecognized state (%d)\n", (int)AppGlobal.State);
+			ESPAPP_LOG("ERROR: Unrecognised state (%d)\n", (int)AppGlobal.State);
 			panic();
+	}
+	if (AppGlobal.State < APP_SERVICE) {
+		__userapp_prestart_loop();
 	}
 }
 

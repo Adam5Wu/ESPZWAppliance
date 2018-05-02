@@ -30,6 +30,15 @@ void setup() {
   // - Timezone: loaded from configuration, or default UTC
 }
 
+void prestart_loop() {
+  // This function works similar to loop() except:
+  // - It is invoked when ZWAppliance is NOT in service mode
+  //   * Current mode varies, can be one of APP_STARTUP, APP_INIT, APP_PORTAL
+  // - Invocation interval varies, depending on appliance mode and states
+  //   * When stable in APP_PORTAL mode, interval tend to match normal loop()
+  //   * Otherwise, expect random interval up to ~100ms
+}
+
 bool startup() {
   // This function is invoked each time ZWAppliance enters service mode.
   // The following condition(s) has been reached:
