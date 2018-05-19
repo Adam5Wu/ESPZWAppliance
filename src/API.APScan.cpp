@@ -153,6 +153,7 @@ void AsyncAPIAPScanWebHandler::_handleRequest(AsyncWebRequest &request) {
 		return;
 	}
 	if (ForceScan || APList.isEmpty()) {
+		ForceScan = false;
 		if (!Portal_StartAPScan()) {
 			ESPWSAPSCAN_DEBUGV("[%s] Current state does not allow scanning\n",
 				request._remoteIdent.c_str());
@@ -165,7 +166,6 @@ void AsyncAPIAPScanWebHandler::_handleRequest(AsyncWebRequest &request) {
 			request.send_P(500, PSTR("Unable to enter scan mode"), F("text/plain"));
 			return;
 		}
-		ScanInProg = true;
 		scan_config config = {0};
 		config.show_hidden = true;
 		config.scan_type = WIFI_SCAN_TYPE_PASSIVE;
@@ -173,6 +173,7 @@ void AsyncAPIAPScanWebHandler::_handleRequest(AsyncWebRequest &request) {
 			ESPWSAPSCAN_DEBUGV("[%s] Failed to start AP scan\n", request._remoteIdent.c_str());
 			request.send(204);
 		} else {
+			ScanInProg = true;
 			ESPWSAPSCAN_DEBUGV("[%s] Starting AP scan...\n", request._remoteIdent.c_str());
 			request.send(204);
 		}
