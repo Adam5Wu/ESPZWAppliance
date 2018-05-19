@@ -60,7 +60,7 @@ void ScanFinished(bss_info* result, STATUS status) {
 		memcpy(entry.MAC, scanEntry->bssid, 6);
 		entry.Channel = scanEntry->channel;
 		entry.RSSI = scanEntry->rssi;
-		entry.Features = 0;		
+		entry.Features = 0;
 		if (scanEntry->phy_11b) entry.Features |= AP_PHY_11b;
 		if (scanEntry->phy_11g) entry.Features |= AP_PHY_11g;
 		if (scanEntry->phy_11n) entry.Features |= AP_PHY_11n;
