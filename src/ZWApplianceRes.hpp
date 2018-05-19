@@ -1,7 +1,7 @@
 #ifndef __PGMRES__
 #define __PGMRES__
 
-#define ZWAPP_VERSION   "0.1"
+#define ZWAPP_VERSION   "0.2"
 
 #define CONFIG_DIR            "/config"
 #define APPLIANCE_CONFIG_FILE "appliance.json"
@@ -36,10 +36,11 @@
 #define PORTAL_API_HWMON_HEAP   PORTAL_API_HWMON "heap"
 #define PORTAL_API_HWMON_UPTIME PORTAL_API_HWMON "uptime"
 
-#define PORTAL_API_OTA          PORTAL_API_ROOT "ota"
-
+#define PORTAL_API_APSCAN 	    PORTAL_API_ROOT "apscan"
+#define PORTAL_API_CLOCK        PORTAL_API_ROOT "clock"
 #define PORTAL_API_CONFIG       PORTAL_API_ROOT "config/"
 #define PORTAL_API_AUTH         PORTAL_API_ROOT "auth/"
+#define PORTAL_API_OTA          PORTAL_API_ROOT "ota"
 
 #define PORTAL_FSDAV            PORTAL_ROOT "~"
 #define PORTAL_FSDAV_ROOT       PORTAL_FSDAV "/"
