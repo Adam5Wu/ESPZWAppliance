@@ -83,4 +83,3 @@ JsonManagerResults JsonManager(fs::Dir &dir, String const &name,
   }
   return Ret;
 }
-

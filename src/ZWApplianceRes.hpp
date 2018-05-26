@@ -10,15 +10,18 @@
 
 #define PORTAL_DIR              "/portal"
 #define PORTAL_HTML_EXT         ".html"
-#define PORTAL_INDEX_FILE       "index" PORTAL_HTML_EXT
-#define PORTAL_CONFIG_FILE      "config" PORTAL_HTML_EXT
-#define PORTAL_AUTH_FILE        "auth" PORTAL_HTML_EXT
-#define PORTAL_PANIC_FILE       "panic" PORTAL_HTML_EXT
-#define PORTAL_DEVRESET_FILE    "devreset" PORTAL_HTML_EXT
-#define PORTAL_DEVRESTART_FILE  "devrestart" PORTAL_HTML_EXT
-#define PORTAL_OTA_FILE         "ota" PORTAL_HTML_EXT
-#define PORTAL_OTARES_MD5JS     "md5.js"
-#define PORTAL_OTARES_OTACOREJS "ota-core.js"
+#define PORTAL_PAGE_INDEX       "index" PORTAL_HTML_EXT
+#define PORTAL_PAGE_PANIC       "panic" PORTAL_HTML_EXT
+#define PORTAL_PAGE_DEVRESET    "devreset" PORTAL_HTML_EXT
+#define PORTAL_PAGE_DEVRESTART  "devrestart" PORTAL_HTML_EXT
+#define PORTAL_PAGE_OTA         "ota" PORTAL_HTML_EXT
+#define PORTAL_PAGE_SYSCONFIG   "sysconf" PORTAL_HTML_EXT
+#define PORTAL_PAGE_AUTHCONFIG  "authconf" PORTAL_HTML_EXT
+
+#define PORTAL_RES_MD5JS        "md5.js"
+#define PORTAL_RES_JQUERYJS     "jquery.js"
+#define PORTAL_RES_OTACOREJS    "ota-core.js"
+#define PORTAL_RES_APSCANCOREJS "apscan-core.js"
 
 #define PORTAL_ADMIN_USER   "Admin"
 
@@ -56,13 +59,16 @@ const char PORTAL_DEFAULT_ACL[] PROGMEM =
   PORTAL_API_OTA      ":$B:"    PORTAL_ADMIN_USER "\n"
   PORTAL_FSDAV_ROOT   ":$A:"    PORTAL_ADMIN_USER "\n";
 
-extern const char PORTAL_INDEX_PAGE[];
-extern const char PORTAL_DEVRESET_PAGE[];
-extern const char PORTAL_DEVRESTART_PAGE[];
-extern const char PORTAL_PANIC_PAGE[];
-extern const char PORTAL_OTA_PAGE[];
+extern const char PORTAL_RESDATA_INDEX_HTML[];
+extern const char PORTAL_RESDATA_DEVRESET_HTML[];
+extern const char PORTAL_RESDATA_DEVRESTART_HTML[];
+extern const char PORTAL_RESDATA_PANIC_HTML[];
+extern const char PORTAL_RESDATA_OTA_HTML[];
+extern const char PORTAL_RESDATA_SYSCONFIG_HTML[];
 
-extern const char PORTAL_RESDATA_MD5JS[];
-extern const char PORTAL_RESDATA_OTACOREJS[];
+extern const char PORTAL_RESDATA_MD5_JS[];
+extern const char PORTAL_RESDATA_OTACORE_JS[];
+extern const char PORTAL_RESDATA_JQUERY_JS[];
+extern const char PORTAL_RESDATA_APSCANCORE_JS[];
 
 #endif //__PGMRES__

@@ -3,7 +3,6 @@
 
 #include <FS.h>
 #include <sntp.h>
-#include <user_interface.h>
 
 extern "C" {
 	void tune_timeshift64 (uint64_t now_us);
@@ -17,6 +16,7 @@ extern "C" {
 
 #include <ArduinoJson.h>
 
+#include <LinkedList.h>
 #include <Units.h>
 #include <Timezone.h>
 #include <vfatfs_api.h>
@@ -28,6 +28,9 @@ extern "C" {
 #include "AppBaseUtils.hpp"
 #include "ZWApplianceRes.hpp"
 #include "RTCMemory.hpp"
+
+#define __ESPZWAppliance_Internal__
+#include "ESPZWAppliance.h"
 
 #define WLAN_PORTAL_IP      IPAddress(192, 168, 168, 168)
 // Enable gateway for OS portal detection
@@ -96,7 +99,8 @@ static PGM_P StrAppState(AppState state) {
 
 typedef enum {
 	INIT_STA_CONNECT = 0,
-	INIT_NTP_SETUP,
+	INIT_STA_WPS,
+	INIT_NTP_SYNC,
 	INIT_FAIL
 } InitSteps;
 
@@ -149,13 +153,15 @@ static struct {
 } AppGlobal;
 
 static uint32_t RTCFlags;
-Ticker RTCClockUpdate;
+static Ticker RTCClockUpdate;
 
-bool APScanInProgress;
+static TAPList APList(nullptr);
+static time_t APScanLast;
+static bool APScanInProgress;
 
 #ifdef SDKBUG_LIGHTSLEEP_POLL
 
-Ticker LWIPTimer;
+static Ticker LWIPTimer;
 extern "C" {
 	void sys_check_timeouts(void);
 }
@@ -179,6 +185,7 @@ time_t GetCurrentTS() {
 static struct {
 	bool Production;
 	bool PersistWLAN;
+	bool WLAN_WPS;
 
 	WiFiSleepType PowerSaving;
 	float WiFi_Power;
@@ -285,6 +292,7 @@ static void init_config_defaults() {
 	AppConfig.WiFi_Power = CONFIG_DEFAULT_WIFI_POWER;
 	AppConfig.WLAN_AP_Name.clear();
 	AppConfig.WLAN_AP_Pass.clear();
+	AppConfig.WLAN_WPS = true;
 	AppConfig.Init_Retry_Count = CONFIG_DEFAULT_INIT_RETRY_COUNT;
 	AppConfig.Init_Retry_Cycle = CONFIG_DEFAULT_INIT_RETRY_CYCLE;
 	AppConfig.Hostname = String(FC(CONFIG_DEFAULT_HOSTNAME_PFX)) +
@@ -377,6 +385,8 @@ static void load_config_json(JsonObject const &obj) {
 
 	AppConfig.WLAN_AP_Name = obj[FC("WLAN_AP_Name")] | AppConfig.WLAN_AP_Name.c_str();
 	AppConfig.WLAN_AP_Pass = obj[FC("WLAN_AP_Pass")] | AppConfig.WLAN_AP_Pass.c_str();
+	AppConfig.WLAN_WPS = obj[FC("WLAN_WPS")] | AppConfig.WLAN_WPS;
+
 	AppConfig.Init_Retry_Count = obj[FC("Init_Retry_Count")] | AppConfig.Init_Retry_Count;
 	AppConfig.Init_Retry_Cycle = obj[FC("Init_Retry_Cycle")] | AppConfig.Init_Retry_Cycle;
 
@@ -489,6 +499,7 @@ void setup() {
 	AppGlobal.StageTS = AppGlobal.StartTS;
 	//AppGlobal.wsSteps = PORTAL_OFF;
 
+	APScanLast = 0;
 	APScanInProgress = false;
 
 	// Base on boot reason, decide whether we should bypass service
@@ -595,7 +606,7 @@ static void Init_Start() {
 	if (Status != WL_CONNECTED) {
 		ESPAPP_LOG("Connecting to WiFi access point '%s'...\n",
 			AppConfig.WLAN_AP_Name.c_str());
-		WiFi.reconnect();
+		if (!AppConfig.PersistWLAN) WiFi.reconnect();
 		delay(100);
 	}
 }
@@ -609,7 +620,7 @@ static void Init_NTP_Sync() {
 }
 
 static void Init_NTP() {
-	AppGlobal.init.steps = INIT_NTP_SETUP;
+	AppGlobal.init.steps = INIT_NTP_SYNC;
 	if (AppConfig.NTP_Server) {
 		ESPAPP_DEBUG("Synchronizing with NTP server '%s'...\n",
 			AppConfig.NTP_Server.c_str());
@@ -643,9 +654,13 @@ static void loop_INIT() {
 			station_status_t WifiStatus = wifi_station_get_connect_status();
 			switch (WifiStatus) {
 				case STATION_WRONG_PASSWORD:
-					ESPAPP_DEBUG("WARNING: Wrong credential for WiFi access point '%s'\n",
-						AppConfig.WLAN_AP_Name.c_str());
-					AppGlobal.init.steps = INIT_FAIL;
+					if (!AppConfig.WLAN_WPS) {
+						ESPAPP_DEBUG("WARNING: Wrong credential for WiFi access point '%s'\n",
+							AppConfig.WLAN_AP_Name.c_str());
+						AppGlobal.init.steps = INIT_FAIL;
+					} else {
+						//...
+					}
 					break;
 
 				case STATION_GOT_IP:
@@ -685,7 +700,7 @@ static void loop_INIT() {
 			}
 		} break;
 
-		case INIT_NTP_SETUP: {
+		case INIT_NTP_SYNC: {
 			if (AppConfig.NTP_Server) {
 				if (!(RTCFlags & RTC_FLAG_TIMESYNC)) {
 					time_t curTS = sntp_get_current_timestamp();
@@ -773,7 +788,7 @@ static void loop_INIT() {
 #include "API.APScan.hpp"
 #include "API.OTA.hpp"
 
-bool Portal_StartAPScan() {
+static bool Portal_StartAPScan() {
 	APScanInProgress = true;
 	if (AppGlobal.State == APP_PORTAL) {
 		return !AppGlobal.portal.performAPTest;
@@ -781,13 +796,13 @@ bool Portal_StartAPScan() {
 	return true;
 }
 
-void Portal_StopAPScan() {
+static void Portal_StopAPScan() {
 	APScanInProgress = false;
 }
 
 void Portal_WebServer_RespondBuiltInData(AsyncWebRequest &request,
 	PGM_P data, String const &filename, int code = 200) {
-	ESPAPP_DEBUG("* Serving built-in data for '%s'...\n", filename.c_str());
+	ESPAPP_DEBUG("* Serving built-in data for '%s'...\n", request.url().c_str());
 	request.send_P(code, data, AsyncFileResponse::contentTypeByName(filename));
 }
 
@@ -834,6 +849,12 @@ File Portal_WebServer_CheckRestoreRes(Dir &dir, String const &resfile, PGM_P res
 	}
 	return std::move(ResFile);
 }
+
+struct StaticResDefaults {
+	PGM_P Path;
+	PGM_P Content;
+};
+static LinkedList<StaticResDefaults> *PortalStaticResMap = nullptr;
 
 static void Portal_WebServer_Operations() {
 	switch (AppGlobal.wsSteps) {
@@ -923,8 +944,14 @@ static void Portal_WebServer_Operations() {
 		case PORTAL_FILES: {
 			auto PortalDir = get_dir(FC(PORTAL_DIR));
 
-			Portal_WebServer_CheckRestoreRes(PortalDir, FC(PORTAL_OTARES_MD5JS),
-				PORTAL_RESDATA_MD5JS);
+			PortalStaticResMap = new LinkedList<StaticResDefaults>(nullptr);
+			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_PAGE_OTA), PORTAL_RESDATA_OTA_HTML});
+			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_RES_MD5JS), PORTAL_RESDATA_MD5_JS});
+			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_RES_OTACOREJS), PORTAL_RESDATA_OTACORE_JS});
+
+			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_PAGE_SYSCONFIG), PORTAL_RESDATA_SYSCONFIG_HTML});
+			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_RES_JQUERYJS), PORTAL_RESDATA_JQUERY_JS});
+			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_RES_APSCANCOREJS), PORTAL_RESDATA_APSCANCORE_JS});
 
 			AppGlobal.wsSteps = PORTAL_START;
 		} break;
@@ -953,11 +980,11 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_WPAD_FILE"$"),
-					[](AsyncWebRequest &request) {
-						request.send(404);
-					});
 				if (isCaptive) {
+					auto &Handler = AppGlobal.webServer->on(FC(PORTAL_WPAD_FILE"$"),
+						[](AsyncWebRequest &request) {
+							request.send(404);
+						});
 					Handler.addFilter([](AsyncWebRequest const &request) {
 						return request.host().equalsIgnoreCase(AppConfig.Hostname);
 					});
@@ -968,7 +995,7 @@ static void Portal_WebServer_Operations() {
 				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_HWCTL_DEVRESET"$"),
 					[](AsyncWebRequest &request) {
 						Portal_WebServer_RespondFileOrBuiltIn(request,
-							FC(PORTAL_DEVRESET_FILE), PORTAL_DEVRESET_PAGE);
+							FC(PORTAL_PAGE_DEVRESET), PORTAL_RESDATA_DEVRESET_HTML);
 						AppGlobal.wsSteps = PORTAL_DEVRESET;
 					});
 				if (isCaptive) {
@@ -982,7 +1009,7 @@ static void Portal_WebServer_Operations() {
 				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_HWCTL_DEVRESTART"$"),
 					[](AsyncWebRequest &request) {
 						Portal_WebServer_RespondFileOrBuiltIn(request,
-							FC(PORTAL_DEVRESTART_FILE), PORTAL_DEVRESTART_PAGE);
+							FC(PORTAL_PAGE_DEVRESTART), PORTAL_RESDATA_DEVRESTART_HTML);
 						AppGlobal.wsSteps = PORTAL_DEVRESTART;
 					});
 				if (isCaptive) {
@@ -1091,7 +1118,7 @@ static void Portal_WebServer_Operations() {
 			{
 				auto &Handler = AppGlobal.webServer->addHandler(
 					new AsyncAPIOTAWebHandler(FC(PORTAL_API_OTA),
-						FC(PORTAL_ROOT PORTAL_OTA_FILE))
+						FC(PORTAL_ROOT PORTAL_PAGE_OTA))
 				);
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
@@ -1113,7 +1140,7 @@ static void Portal_WebServer_Operations() {
 
 			{
 				auto &Handler = AppGlobal.webServer->serveStatic(FC(PORTAL_ROOT),
-					get_dir(FC(PORTAL_DIR)), FC(PORTAL_INDEX_FILE), FC(DEFAULT_CACHE_CTRL));
+					get_dir(FC(PORTAL_DIR)), FC(PORTAL_PAGE_INDEX), FC(DEFAULT_CACHE_CTRL));
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
 						return request.host().equalsIgnoreCase(AppConfig.Hostname);
@@ -1123,7 +1150,7 @@ static void Portal_WebServer_Operations() {
 				Handler._onGETIndexNotFound = [](AsyncWebRequest &request) {
 					if (request.url() == FC(PORTAL_ROOT)) {
 						Portal_WebServer_RespondBuiltInData(request,
-							PORTAL_INDEX_PAGE, FC(PORTAL_INDEX_FILE));
+							PORTAL_RESDATA_INDEX_HTML, FC(PORTAL_PAGE_INDEX));
 					} else {
 						// Do not allow directory listing
 						request.send(403);
@@ -1131,15 +1158,15 @@ static void Portal_WebServer_Operations() {
 				};
 
 				Handler._onGETPathNotFound = [](AsyncWebRequest &request) {
-					if (request.url() == FC(PORTAL_ROOT PORTAL_OTA_FILE)) {
+					auto ResEntry = PortalStaticResMap->get_if([&](StaticResDefaults const &X) {
+						ESPAPP_DEBUGVV("* Matching '%s' with built-in data '%s'...\n",
+							request.url().c_str(), SFPSTR(X.Path));
+						return (request.url() == FPSTR(X.Path));
+					});
+					if (ResEntry) {
 						Portal_WebServer_RespondBuiltInData(request,
-							PORTAL_OTA_PAGE, FC(PORTAL_OTA_FILE));
-					} else if (request.url() == FC(PORTAL_ROOT PORTAL_OTARES_OTACOREJS)) {
-						Portal_WebServer_RespondBuiltInData(request,
-							PORTAL_RESDATA_OTACOREJS, FC(PORTAL_OTARES_OTACOREJS));
-					} else {
-						request.send(404);
-					}
+							ResEntry->Content, pathGetEntryName(request.url()));
+					} else request.send(404);
 				};
 			}
 
@@ -1280,8 +1307,14 @@ static void Portal_Start() {
 static void Portal_Stop() {
 	if (AppGlobal.webServer) {
 		AppGlobal.webServer->end();
-		while (!AppGlobal.webServer->hasFinished()) delay(100);
+		while (!AppGlobal.webServer->hasFinished()) {
+			delay(100);
+			if (AppGlobal.State == APP_PORTAL)
+				__userapp_prestart_loop();
+		}
 
+		delete PortalStaticResMap;
+		PortalStaticResMap = nullptr;
 		delete AppGlobal.webServer;
 		AppGlobal.webServer = nullptr;
 		delete AppGlobal.webAccounts;
@@ -1546,8 +1579,6 @@ void loop() {
 
 // User-App service routines
 
-#include <ESPZWAppliance.h>
-
 Dir Appliance_GetDir(String const &path) {
 	return get_dir(path);
 }
@@ -1615,6 +1646,10 @@ void Appliance_WebPortal_Stop() {
 	}
 }
 
+void Appliance_WebPortal_RegisterStaticResDefault(PGM_P path, PGM_P content) {
+	PortalStaticResMap->append({path, content});
+}
+
 void Appliance_WebPortal_RespondBuiltInData(AsyncWebRequest &request,
 	PGM_P data, String const &filename, int code) {
 	return Portal_WebServer_RespondBuiltInData(request, data, filename, code);
@@ -1636,4 +1671,117 @@ void Appliance_Service_Reload() {
 
 void Appliance_Device_Restart() {
 	SwitchState(APP_DEVRESTART);
+}
+
+static void APScanFinished(bss_info* result, STATUS status) {
+	Portal_StopAPScan();
+	if (status != OK) {
+		ESPAPP_DEBUGV("AP scan failed!\n");
+		return;
+	}
+
+	ESPAPP_DEBUGV("AP scan completed!\n");
+	APList.clear();
+	APScanLast = GetCurrentTS();
+
+	bss_info* scanEntry = result;
+	ESPAPP_DEBUGDO(int8_t apCnt = 0; int8_t apNCnt = 0);
+	while (scanEntry) {
+		APEntry entry;
+		ESPAPP_DEBUGDO(++apCnt);
+		if (!scanEntry->is_hidden) {
+			entry.SSID = String((char*)scanEntry->ssid, scanEntry->ssid_len);
+			ESPAPP_DEBUGDO(++apNCnt);
+		}
+		memcpy(entry.MAC, scanEntry->bssid, 6);
+		entry.Channel = scanEntry->channel;
+		entry.RSSI = scanEntry->rssi;
+		entry.Features = 0;
+		if (scanEntry->phy_11b) entry.Features |= AP_PHY_11b;
+		if (scanEntry->phy_11g) entry.Features |= AP_PHY_11g;
+		if (scanEntry->phy_11n) entry.Features |= AP_PHY_11n;
+		if (scanEntry->wps) entry.Features |= AP_WPS;
+		entry.Auth = scanEntry->authmode;
+		APList.append(std::move(entry));
+
+		ESPAPP_DEBUGVVDO({
+			String APEntry;
+			for (int i = 0; i < 6; i++) {
+				if (APEntry) APEntry.concat(':');
+				APEntry.concat(HexLookup_UC[scanEntry->bssid[i] >> 4 & 0xF]);
+				APEntry.concat(HexLookup_UC[scanEntry->bssid[i] & 0xF]);
+			}
+			if (!scanEntry->is_hidden) {
+				APEntry.concat(' ');
+				APEntry.concat('[');
+				APEntry.concat((char*)scanEntry->ssid, scanEntry->ssid_len);
+				APEntry.concat(']');
+			}
+			APEntry.concat(F(" CH"));
+			APEntry.concat(scanEntry->channel);
+			APEntry.concat(',');
+			APEntry.concat(scanEntry->rssi);
+			APEntry.concat(FC("dBm "));
+			APEntry.concat('(');
+			if (scanEntry->phy_11b) APEntry.concat('b');
+			if (scanEntry->phy_11g) APEntry.concat('g');
+			if (scanEntry->phy_11n) APEntry.concat('n');
+			if (scanEntry->wps) APEntry.concat(F(",WPS"));
+			APEntry.concat(')');
+			APEntry.concat(' ');
+			switch (scanEntry->authmode) {
+				case AUTH_OPEN: APEntry.concat(F("OPEN")); break;
+				case AUTH_WEP: APEntry.concat(F("WEP")); break;
+				case AUTH_WPA_PSK: APEntry.concat(F("WPA-PSK")); break;
+				case AUTH_WPA2_PSK: APEntry.concat(F("WPA2-PSK")); break;
+				case AUTH_WPA_WPA2_PSK: APEntry.concat(F("WPA/WPA2-PSK")); break;
+				default: APEntry.concat(F("UNSUPPORTED")); break;
+			}
+			ESPAPP_LOG("AP #%d: %s\n",apCnt,APEntry.c_str());
+		});
+		scanEntry = STAILQ_NEXT(scanEntry, next);
+	}
+	ESPAPP_DEBUG("* Discovered %d APs (%d named)\n", apCnt, apNCnt);
+}
+
+bool Appliance_APScan_Start(wifi_scan_type_t ScanType, time_t FreshDur) {
+	if (APScanInProgress) {
+		ESPAPP_DEBUG("WARNING: AP scan already in progress...\n");
+		return true;
+	}
+	if (!APList.isEmpty()) {
+		time_t curTS = GetCurrentTS();
+		if (curTS - APScanLast < FreshDur) {
+			ESPAPP_DEBUGV("Existing AP scan result still fresh\n");
+			return true;
+		}
+	}
+	if (!Portal_StartAPScan()) {
+		ESPAPP_DEBUG("Current state does not allow AP scanning\n");
+		return false;
+	}
+	if (!WiFi.enableSTA(true)) {
+		ESPAPP_DEBUG("Failed to enable WiFi client mode for AP scan\n");
+		return false;
+	}
+	scan_config config = {0};
+	config.show_hidden = true;
+	config.scan_type = ScanType;
+	if (!wifi_station_scan(&config, (scan_done_cb_t)APScanFinished)) {
+		ESPAPP_DEBUG("Failed to start AP scan\n");
+		return false;
+	}
+	return true;
+}
+
+bool Appliance_APScan_InProgress() {
+	return APScanInProgress;
+}
+
+void Appliance_EnumAPList(TAPList::Predicate const &pred) {
+	APList.apply([&](APEntry &i) { return pred(i); });
+}
+
+void Appliance_ClearAPList() {
+	APList.clear();
 }
