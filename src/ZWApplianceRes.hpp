@@ -3,10 +3,10 @@
 
 #define ZWAPP_VERSION   "0.2"
 
-#define CONFIG_DIR            "/config"
-#define APPLIANCE_CONFIG_FILE "appliance.json"
-#define PORTAL_ACCOUNTS_FILE  "portal.accounts.txt"
-#define PORTAL_ACCESS_FILE    "portal.access.txt"
+#define CONFIG_DIR              "/config"
+#define APPLIANCE_CONFIG_FILE   "appliance.json"
+#define PORTAL_ACCOUNTS_FILE    "portal.accounts.txt"
+#define PORTAL_ACCESS_FILE      "portal.access.txt"
 
 #define PORTAL_DIR              "/portal"
 #define PORTAL_HTML_EXT         ".html"

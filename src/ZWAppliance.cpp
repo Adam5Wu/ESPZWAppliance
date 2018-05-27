@@ -56,10 +56,10 @@ extern "C" {
 #define CONFIG_DEFAULT_WIFI_POWER         WIFI_POWER_MEDIUM
 
 #define CONFIG_DEFAULT_HOSTNAME_PFX       "ESP8266-"
-#define CONFIG_DEFAULT_INIT_RETRY_CYCLE   10          // Seconds to wait before retry init steps (AP/NTP) or access point test
-#define CONFIG_DEFAULT_INIT_RETRY_COUNT   6           // Number of retries before fallback to portal mode from init mode
+#define CONFIG_DEFAULT_INIT_RETRY_CYCLE   20          // Seconds to wait before retry init steps (AP/NTP) or access point test
+#define CONFIG_DEFAULT_INIT_RETRY_COUNT   2           // Number of retries before fallback to portal mode from init mode
 #define CONFIG_DEFAULT_PORTAL_TIMEOUT     (5 * 60)    // Seconds the web portal is active and idle after enter service mode
-#define CONFIG_DEFAULT_PORTAL_APTEST      30          // Seconds to test access point after entering portal mode and web portal is idle
+#define CONFIG_DEFAULT_PORTAL_APTEST      60          // Seconds to test access point after entering portal mode and web portal is idle
 
 #define RTC_SLOTS_RESERVED      8
 
@@ -72,7 +72,6 @@ extern "C" {
 #define RTC_CLOCKUPDATE         15  // Update RTC last known clock every 15 seconds
 
 #define SDKBUG_LIGHTSLEEP_POLL
-#define SDKBUG_RECONNECT_STATE
 
 typedef enum {
 	APP_STARTUP = 0,
@@ -136,6 +135,7 @@ static struct {
 			ESPAPP_DEBUGVVDO(time_t cycleSpan);
 			InitSteps steps;
 			uint8_t cycleCount;
+			bool authFailure;
 		} init;
 		struct {
 			Ticker* apTestTimer;
@@ -157,7 +157,23 @@ static Ticker RTCClockUpdate;
 
 static TAPList APList(nullptr);
 static time_t APScanLast;
+
+static bool APReceivedIP;
+static bool APConnected;
 static bool APScanInProgress;
+static WiFiDisconnectReason APLastDisconnectReason;
+
+typedef enum {
+	WPS_IDLE = 0,
+	WPS_SUCCESS,
+	WPS_PROGRESS,
+	WPS_NOTFOUND,
+	WPS_TIMEOUT,
+	WPS_NOSUPPORT,
+	WPS_FAIL
+} WPSStatusCode;
+
+static WPSStatusCode WPSStatus;
 
 #ifdef SDKBUG_LIGHTSLEEP_POLL
 
@@ -470,6 +486,12 @@ static PGM_P resetReasonToStr(uint32_t reason) {
 	}
 }
 
+static void WiFiEvent_Connected(const WiFiEventStationModeConnected& evt);
+static void WiFiEvent_ReceivedIP(const WiFiEventStationModeGotIP& evt);
+static void WiFiEvent_Disconnected(const WiFiEventStationModeDisconnected& evt);
+
+WiFiEventHandler onConnected, onReceivedIP, onDisconnected;
+
 void setup() {
 	Serial.begin(115200);
 	delay(100);
@@ -501,6 +523,11 @@ void setup() {
 
 	APScanLast = 0;
 	APScanInProgress = false;
+
+	WPSStatus = WPS_IDLE;
+	APReceivedIP = false;
+	APConnected = false;
+	APLastDisconnectReason = WIFI_DISCONNECT_REASON_UNSPECIFIED;
 
 	// Base on boot reason, decide whether we should bypass service
 	ESPAPP_DEBUG("Boot reason: %s\n",
@@ -563,6 +590,10 @@ void setup() {
 	}
 	WiFi.setOutputPower(AppConfig.WiFi_Power);
 
+	onConnected = WiFi.onStationModeConnected(WiFiEvent_Connected);
+	onReceivedIP = WiFi.onStationModeGotIP(WiFiEvent_ReceivedIP);
+	onDisconnected = WiFi.onStationModeDisconnected(WiFiEvent_Disconnected);
+
 	if (!WiFi.mode(WIFI_STA)) {
 		ESPAPP_LOG("ERROR: Failed to enable WiFi client mode!\n");
 		panic();
@@ -593,6 +624,33 @@ void setup() {
 		__userapp_setup();
 }
 
+static void WiFiEvent_Connected(const WiFiEventStationModeConnected& evt) {
+	ESPAPP_DEBUGVV("- WiFi connected!\n");
+	APLastDisconnectReason = WIFI_DISCONNECT_REASON_UNSPECIFIED;
+	APConnected = APReceivedIP;
+}
+
+static void WiFiEvent_ReceivedIP(const WiFiEventStationModeGotIP& evt) {
+	ESPAPP_DEBUGVV("- WiFi obtained IP!\n");
+	APConnected = APReceivedIP = true;
+}
+
+static void WiFiEvent_Disconnected(const WiFiEventStationModeDisconnected& evt) {
+	ESPAPP_DEBUGVV("WiFi disconnection (reason %d)\n", evt.reason);
+	APConnected = false;
+
+	if ((AppGlobal.State == APP_INIT) && (AppGlobal.init.steps == INIT_STA_CONNECT)) {
+		switch (evt.reason) {
+			case WIFI_DISCONNECT_REASON_AUTH_EXPIRE:
+			case WIFI_DISCONNECT_REASON_AUTH_FAIL:
+				// Need two repeated code to confirm
+				if (APLastDisconnectReason != evt.reason) break;
+				AppGlobal.init.authFailure = true;
+		}
+		APLastDisconnectReason = evt.reason;
+	}
+}
+
 static void Init_Start() {
 	SwitchState(APP_INIT);
 	if (AppConfig.PersistWLAN) {
@@ -600,6 +658,7 @@ static void Init_Start() {
 	}
 	//AppGlobal.init.steps = INIT_STA_CONNECT;
 	AppGlobal.init.cycleTS = AppGlobal.init.lastKnownTS = GetCurrentTS();
+	//AppGlobal.init.authFailure = false;
 
 	auto Status = WiFi.begin(AppConfig.WLAN_AP_Name.c_str(), AppConfig.WLAN_AP_Pass.c_str(),
 		0, nullptr, false);
@@ -648,31 +707,88 @@ static void updateRTCClock() {
 	}
 }
 
+static void WPS_Finished(wps_cb_status status) {
+	if(!wifi_wps_disable()) {
+		ESPAPP_DEBUG("WARNING: Error leaving WPS mode!\n");
+	}
+	switch (status) {
+		case WPS_CB_ST_SUCCESS:
+			ESPAPP_DEBUG("WPS successful!\n");
+			WPSStatus = WPS_SUCCESS;
+			wifi_station_connect();
+		break;
+		case WPS_CB_ST_TIMEOUT:
+			ESPAPP_DEBUG("WPS timed out!\n");
+			WPSStatus = WPS_TIMEOUT;
+		break;
+		case WPS_CB_ST_WEP:
+			ESPAPP_DEBUG("WPS required WEP support!\n");
+			WPSStatus = WPS_NOSUPPORT;
+		break;
+		case WPS_CB_ST_UNK:
+			ESPAPP_DEBUG("WPS unable to locate access point!\n");
+			WPSStatus = WPS_NOTFOUND;
+		break;
+		case WPS_CB_ST_FAILED:
+			ESPAPP_DEBUG("WPS negotiation failed!\n");
+			WPSStatus = WPS_FAIL;
+			break;
+		default:
+			ESPAPP_DEBUG("WPS unrecognised status (%d)\n", status);
+			WPSStatus = WPS_FAIL;
+	}
+}
+
+static bool WPS_Start() {
+	if (WPSStatus == WPS_PROGRESS) {
+		ESPAPP_LOG("WARNING: WPS already in progress!\n");
+		return false;
+	}
+	WPSStatus = WPS_IDLE;
+	if(!wifi_wps_enable(WPS_TYPE_PBC)) {
+		ESPAPP_DEBUG("Unable to enter WPS mode!\n");
+		return false;
+	}
+	if(!wifi_set_wps_cb((wps_st_cb_t)&WPS_Finished)) {
+		ESPAPP_DEBUG("Unable to configure WPS callback!\n");
+        return false;
+    }
+	if(!wifi_wps_start()) {
+		ESPAPP_DEBUG("Unable to start WPS procedure!\n");
+        return false;
+    }
+	WPSStatus = WPS_PROGRESS;
+	return true;
+}
+
 static void loop_INIT() {
 	switch (AppGlobal.init.steps) {
 		case INIT_STA_CONNECT: {
-			station_status_t WifiStatus = wifi_station_get_connect_status();
-			switch (WifiStatus) {
-				case STATION_WRONG_PASSWORD:
+			if (APConnected) {
+				ESPAPP_DEBUG("Connected to WiFi access point '%s'\n",
+				AppConfig.WLAN_AP_Name.c_str());
+				ESPAPP_LOG("IP address: %s\n", WiFi.localIP().toString().c_str());
+				ESPAPP_DEBUG("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+				ESPAPP_DEBUG("Name Server: %s\n", WiFi.dnsIP().toString().c_str());
+				Init_NTP();
+			} else {
+				if (AppGlobal.init.authFailure) {
 					if (!AppConfig.WLAN_WPS) {
 						ESPAPP_DEBUG("WARNING: Wrong credential for WiFi access point '%s'\n",
 							AppConfig.WLAN_AP_Name.c_str());
 						AppGlobal.init.steps = INIT_FAIL;
 					} else {
-						//...
+						if (WPS_Start()) {
+							ESPAPP_LOG("Starting WPS with WiFi access point '%s'...\n",
+								AppConfig.WLAN_AP_Name.c_str());
+							AppGlobal.init.steps = INIT_STA_WPS;
+						} else {
+							ESPAPP_DEBUG("Failed to start WPS with WiFi access point '%s'\n",
+								AppConfig.WLAN_AP_Name.c_str());
+							AppGlobal.init.steps = INIT_FAIL;
+						}
 					}
-					break;
-
-				case STATION_GOT_IP:
-					ESPAPP_DEBUG("Connected to WiFi access point '%s'\n",
-						AppConfig.WLAN_AP_Name.c_str());
-					ESPAPP_LOG("IP address: %s\n", WiFi.localIP().toString().c_str());
-					ESPAPP_DEBUG("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
-					ESPAPP_DEBUG("Name Server: %s\n", WiFi.dnsIP().toString().c_str());
-					Init_NTP();
-					break;
-
-				default: {
+				} else {
 					AppGlobal.init.lastKnownTS = GetCurrentTS();
 					time_t ConnectSpan = AppGlobal.init.lastKnownTS - AppGlobal.init.cycleTS;
 					if (ConnectSpan < AppConfig.Init_Retry_Cycle) {
@@ -680,8 +796,7 @@ static void loop_INIT() {
 							time_t cycleSpan = AppConfig.Init_Retry_Cycle - ConnectSpan;
 							if (cycleSpan != AppGlobal.init.cycleSpan) {
 								AppGlobal.init.cycleSpan = cycleSpan;
-								ESPAPP_LOG("Waiting for WiFi connection... "
-									"(%s to next retry)\n",
+								ESPAPP_LOG("Waiting for WiFi connection... (%s to next retry)\n",
 									ToString(cycleSpan, TimeUnit::SEC, true).c_str());
 							}
 						});
@@ -689,13 +804,45 @@ static void loop_INIT() {
 						break;
 					}
 					if (++AppGlobal.init.cycleCount < AppConfig.Init_Retry_Count) {
-						ESPAPP_DEBUGV("WiFi access point connect timeout, retrying... "
-							"(%d retries left)\n",
+						ESPAPP_DEBUGV("WiFi access point connect timeout, retrying... (%d retries left)\n",
 							AppConfig.Init_Retry_Count - AppGlobal.init.cycleCount);
 						AppGlobal.init.cycleTS = AppGlobal.init.lastKnownTS;
 						WiFi.reconnect();
 						delay(100);
 					} else Init_TimeoutTrigger();
+				}
+			}
+		} break;
+
+		case INIT_STA_WPS: {
+			switch (WPSStatus) {
+				// WPS in progress
+				case WPS_PROGRESS: delay(100); break;
+				// WPS succeeded
+				case WPS_SUCCESS: {
+					struct station_config wificonfig;
+					wifi_station_get_config(&wificonfig);
+					AppConfig.WLAN_AP_Pass = (char const *)wificonfig.password;
+					ESPAPP_DEBUGVV("WPS obtained WiFi access point password '%s'\n",
+						AppConfig.WLAN_AP_Pass.c_str());
+					auto JMRet = update_config(APPLIANCE_CONFIG_FILE,
+						[&](JsonObject & obj, BoundedDynamicJsonBuffer & buf) {
+							obj[FC("WLAN_AP_Pass")] = AppConfig.WLAN_AP_Pass;
+							return true;
+						});
+					if (JMRet != JSONMAN_OK_UPDATED) {
+						ESPAPP_DEBUG("WARNING: Unable to update WLAN password - "
+							"unexpected json config manager result (%d)\n", JMRet);
+					}
+					// Connection has already started, wait for complete...
+					APLastDisconnectReason = WIFI_DISCONNECT_REASON_UNSPECIFIED;
+					AppGlobal.init.authFailure = false;
+					AppGlobal.init.cycleTS = GetCurrentTS();
+					AppGlobal.init.steps = INIT_STA_CONNECT;
+				} break;
+				// WPS unsuccessful
+				default: {
+					AppGlobal.init.steps = INIT_FAIL;
 				}
 			}
 		} break;
@@ -1341,23 +1488,11 @@ static void Portal_APTest() {
 		delay(100);
 		// We are taking a long time off the main loop, need to invoke user app loop separately
 		__userapp_prestart_loop();
-		station_status_t WifiStatus = wifi_station_get_connect_status();
-		switch (WifiStatus) {
-			case STATION_WRONG_PASSWORD:
-				ESPAPP_DEBUG("WARNING: Wrong credential for WiFi access point '%s'\n",
-					AppConfig.WLAN_AP_Name.c_str());
-				startTS = 0;
-				break;
-
-			case STATION_GOT_IP:
-				ESPAPP_LOG("Successfully connected to WiFi access point '%s'!\n",
-					AppConfig.WLAN_AP_Name.c_str());
-				Connected = true;
-				startTS = 0;
-				break;
-
-			default:
-				ESPAPP_DEBUGVV("Connection status: %d\n", WifiStatus);
+		if (APConnected) {
+			ESPAPP_LOG("Successfully connected to WiFi access point '%s'!\n",
+				AppConfig.WLAN_AP_Name.c_str());
+			Connected = true;
+			startTS = 0;
 		}
 	} while (GetCurrentTS() - startTS < AppConfig.Init_Retry_Cycle);
 
@@ -1443,22 +1578,16 @@ static void Service_APMonitor() {
 
 	if (!APScanInProgress) {
 		// Only check WiFi connection status when there is no AP scan
-		station_status_t WifiStatus = wifi_station_get_connect_status();
-		if (WifiStatus == STATION_GOT_IP) {
+		if (APConnected) {
 			if (AppGlobal.service.lastAPAvailableTS) {
 				AppGlobal.service.lastAPAvailableTS = 0;
 				ESPAPP_DEBUG("Re-connected to WiFi access point!\n");
 			}
 		} else {
-			bool TriggerReconnect = false;
-			ESPAPP_DEBUGVV("Connection status: %d\n", WifiStatus);
 			if (!AppGlobal.service.lastAPAvailableTS) {
 				AppGlobal.service.lastAPAvailableTS = Now;
 				ESPAPP_DEBUG("Disconnected from WiFi access point, "
 					"waiting for reconnect...\n");
-#ifdef SDKBUG_RECONNECT_STATE
-				TriggerReconnect = true;
-#endif
 			} else {
 				time_t BreakSpan = Now - AppGlobal.service.lastAPAvailableTS;
 				if (BreakSpan >= AppConfig.Init_Retry_Count * AppConfig.Init_Retry_Cycle) {
@@ -1468,17 +1597,8 @@ static void Service_APMonitor() {
 				} else if (BreakSpan && !(BreakSpan % AppConfig.Init_Retry_Cycle)) {
 					ESPAPP_DEBUGV("Disconnected from WiFi access point for %s\n",
 						ToString(BreakSpan, TimeUnit::SEC, true).c_str());
-					TriggerReconnect = true;
+					WiFi.reconnect();
 				}
-			}
-			if (TriggerReconnect) {
-#ifdef SDKBUG_RECONNECT_STATE
-				WiFi.disconnect(true);
-				delay(100);
-				WiFi.begin(AppConfig.WLAN_AP_Name.c_str(), AppConfig.WLAN_AP_Pass.c_str());
-#else
-				WiFi.reconnect();
-#endif
 			}
 		}
 	}
@@ -1512,6 +1632,8 @@ static void loop_SERVICE() {
 		}
 		// Turn off STA
 		WiFi.disconnect(true);
+		// Forget that we had an IP
+		APReceivedIP = false;
 		delay(100);
 		Portal_Start();
 		return;
@@ -1673,7 +1795,7 @@ void Appliance_Device_Restart() {
 	SwitchState(APP_DEVRESTART);
 }
 
-static void APScanFinished(bss_info* result, STATUS status) {
+static void APScan_Finished(bss_info* result, STATUS status) {
 	Portal_StopAPScan();
 	if (status != OK) {
 		ESPAPP_DEBUGV("AP scan failed!\n");
@@ -1767,7 +1889,7 @@ bool Appliance_APScan_Start(wifi_scan_type_t ScanType, time_t FreshDur) {
 	scan_config config = {0};
 	config.show_hidden = true;
 	config.scan_type = ScanType;
-	if (!wifi_station_scan(&config, (scan_done_cb_t)APScanFinished)) {
+	if (!wifi_station_scan(&config, (scan_done_cb_t)APScan_Finished)) {
 		ESPAPP_DEBUG("Failed to start AP scan\n");
 		return false;
 	}
