@@ -31,21 +31,27 @@
 
 #define PORTAL_API_ROOT     PORTAL_ROOT "api/"
 
-#define PORTAL_API_HWCTL              PORTAL_API_ROOT "hwctl/"
+#define PORTAL_API_HWCTL              PORTAL_API_ROOT  "hwctl/"
 #define PORTAL_API_HWCTL_DEVRESET     PORTAL_API_HWCTL "reset"
 #define PORTAL_API_HWCTL_DEVRESTART   PORTAL_API_HWCTL "restart"
+#define PORTAL_API_HWCTL_APSCAN       PORTAL_API_HWCTL "apscan"
 
-#define PORTAL_API_HWMON        PORTAL_API_ROOT "hwmon/"
-#define PORTAL_API_HWMON_HEAP   PORTAL_API_HWMON "heap"
-#define PORTAL_API_HWMON_UPTIME PORTAL_API_HWMON "uptime"
+#define PORTAL_API_HWMON          PORTAL_API_ROOT  "hwmon/"
+#define PORTAL_API_HWMON_HEAP     PORTAL_API_HWMON "heap"
+#define PORTAL_API_HWMON_UPTIME   PORTAL_API_HWMON "uptime"
 
-#define PORTAL_API_APSCAN 	    PORTAL_API_ROOT "apscan"
-#define PORTAL_API_CLOCK        PORTAL_API_ROOT "clock"
+#define PORTAL_API_VERSION        PORTAL_API_ROOT "version/"
+#define PORTAL_API_VERSION_ZWAPP  PORTAL_API_VERSION "zwapp"
+
+#define PORTAL_API_STATE          PORTAL_API_ROOT "state/"
+#define PORTAL_API_STATE_WLAN     PORTAL_API_STATE "wlan"
+#define PORTAL_API_STATE_CLOCK    PORTAL_API_STATE "clock"
+
 #define PORTAL_API_CONFIG       PORTAL_API_ROOT "config/"
 #define PORTAL_API_AUTH         PORTAL_API_ROOT "auth/"
 #define PORTAL_API_OTA          PORTAL_API_ROOT "ota"
 
-#define PORTAL_FSDAV            PORTAL_ROOT "~"
+#define PORTAL_FSDAV            PORTAL_ROOT  "~"
 #define PORTAL_FSDAV_ROOT       PORTAL_FSDAV "/"
 
 #include <ESPEasyAuth.h>

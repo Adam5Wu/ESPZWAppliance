@@ -83,3 +83,34 @@ JsonManagerResults JsonManager(fs::Dir &dir, String const &name,
   }
   return Ret;
 }
+
+String PrintMAC(uint8_t const *MAC) {
+	String MACString;
+	for (int i = 0; i < 6; i++) {
+		MACString.concat(HexLookup_UC[MAC[i] >> 4 & 0xF]);
+		MACString.concat(HexLookup_UC[MAC[i] & 0xF]);
+	}
+	return std::move(MACString);
+}
+
+String PrintIP(uint32_t const IP) {
+	String IPString;
+	IPString.concat(IP >> 24 & 0xFF);
+	IPString.concat('.');
+	IPString.concat(IP >> 16 & 0xFF);
+	IPString.concat('.');
+	IPString.concat(IP >> 8 & 0xFF);
+	IPString.concat('.');
+	IPString.concat(IP >> 0 & 0xFF);
+}
+
+String PrintAuth(AUTH_MODE const Auth) {
+	switch (Auth) {
+		case AUTH_OPEN: return F("OPEN");
+		case AUTH_WEP: return F("WEP");
+		case AUTH_WPA_PSK: return F("WPA-PSK");
+		case AUTH_WPA2_PSK: return F("WPA2-PSK");
+		case AUTH_WPA_WPA2_PSK: return F("WPA/WPA2-PSK");
+		default: return F("UNSUPPORTED");
+	}
+}

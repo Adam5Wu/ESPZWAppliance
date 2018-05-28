@@ -3,6 +3,8 @@
 
 #include <functional>
 
+#include <user_interface.h>
+
 #include <FS.h>
 #include <WString.h>
 
@@ -70,5 +72,9 @@ JsonManagerResults JsonManager(fs::Dir &dir, String const &name,
                                JsonFileCallback const &malstor_cb = JsonFileCallback(),
                                uint8_t nest_limit = JSON_MAXIMUM_PARSER_NEST,
                                size_t buf_limit = JSON_MAXIMUM_PARSER_BUFFER);
+
+String PrintMAC(uint8_t const *MAC);
+String PrintIP(uint32_t const IP);
+String PrintAuth(AUTH_MODE const Auth);
 
 #endif //__APPBASEUTILS_H__

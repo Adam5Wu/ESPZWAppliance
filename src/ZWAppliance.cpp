@@ -158,10 +158,14 @@ static Ticker RTCClockUpdate;
 static TAPList APList(nullptr);
 static time_t APScanLast;
 
+static uint8_t APMAC[6];
+static uint8_t APCHAN;
+
 static bool APReceivedIP;
 static bool APConnected;
-static bool APScanInProgress;
 static WiFiDisconnectReason APLastDisconnectReason;
+
+static bool APScanInProgress;
 
 typedef enum {
 	WPS_IDLE = 0,
@@ -628,6 +632,8 @@ static void WiFiEvent_Connected(const WiFiEventStationModeConnected& evt) {
 	ESPAPP_DEBUGVV("- WiFi connected!\n");
 	APLastDisconnectReason = WIFI_DISCONNECT_REASON_UNSPECIFIED;
 	APConnected = APReceivedIP;
+	memcpy(APMAC, evt.bssid, 6);
+	APCHAN = evt.channel;
 }
 
 static void WiFiEvent_ReceivedIP(const WiFiEventStationModeGotIP& evt) {
@@ -820,19 +826,23 @@ static void loop_INIT() {
 				case WPS_PROGRESS: delay(100); break;
 				// WPS succeeded
 				case WPS_SUCCESS: {
-					struct station_config wificonfig;
-					wifi_station_get_config(&wificonfig);
-					AppConfig.WLAN_AP_Pass = (char const *)wificonfig.password;
-					ESPAPP_DEBUGVV("WPS obtained WiFi access point password '%s'\n",
-						AppConfig.WLAN_AP_Pass.c_str());
-					auto JMRet = update_config(APPLIANCE_CONFIG_FILE,
-						[&](JsonObject & obj, BoundedDynamicJsonBuffer & buf) {
-							obj[FC("WLAN_AP_Pass")] = AppConfig.WLAN_AP_Pass;
-							return true;
-						});
-					if (JMRet != JSONMAN_OK_UPDATED) {
-						ESPAPP_DEBUG("WARNING: Unable to update WLAN password - "
-							"unexpected json config manager result (%d)\n", JMRet);
+					struct station_config staConfig;
+					if (wifi_station_get_config(&staConfig)) {
+						AppConfig.WLAN_AP_Pass = (char *)staConfig.password;
+						ESPAPP_DEBUGVV("WPS obtained WiFi access point password '%s'\n",
+							AppConfig.WLAN_AP_Pass.c_str());
+						auto JMRet = update_config(APPLIANCE_CONFIG_FILE,
+							[&](JsonObject & obj, BoundedDynamicJsonBuffer & buf) {
+								obj[FC("WLAN_AP_Pass")] = AppConfig.WLAN_AP_Pass;
+								return true;
+							});
+						if (JMRet != JSONMAN_OK_UPDATED) {
+							ESPAPP_DEBUG("WARNING: Unable to update WLAN password - "
+								"unexpected json config manager result (%d)\n", JMRet);
+						}
+					} else {
+						ESPAPP_DEBUG("WARNING: Unable to obtain WiFi access point password\n");
+						ESPAPP_DEBUG("WARNING: Another round of WPS may be necessary after reset\n");
 					}
 					// Connection has already started, wait for complete...
 					APLastDisconnectReason = WIFI_DISCONNECT_REASON_UNSPECIFIED;
@@ -1211,7 +1221,19 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_CLOCK"$"),
+				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_VERSION_ZWAPP"$"),
+				[](AsyncWebRequest &request) {
+					request.send_P(200, PSTR_C(ZWAPP_VERSION), FC("text/plain"));
+				});
+				if (isCaptive) {
+					Handler.addFilter([](AsyncWebRequest const &request) {
+						return request.host().equalsIgnoreCase(AppConfig.Hostname);
+					});
+				}
+			}
+
+			{
+				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_STATE_CLOCK"$"),
 					[](AsyncWebRequest &request) {
 						time_t utc_clock = sntp_get_current_timestamp();
 						TimeChangeRule* TZ;
@@ -1219,7 +1241,7 @@ static void Portal_WebServer_Operations() {
 						struct tm tm_out;
 						localtime_r(&clock, &tm_out);
 						AsyncJsonResponse * response =
-						AsyncJsonResponse::CreateNewObjectResponse();
+							AsyncJsonResponse::CreateNewObjectResponse();
 						response->root[FC("u")] = utc_clock;
 						response->root[FC("Y")] = tm_out.tm_year+1900;
 						response->root[FC("m")] = tm_out.tm_mon+1;
@@ -1240,8 +1262,73 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
+				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_STATE_WLAN"$"),
+				[](AsyncWebRequest &request) {
+					AsyncJsonResponse * response =
+						AsyncJsonResponse::CreateNewObjectResponse();
+					JsonObject &Root = response->root.as<JsonObject&>();
+					auto WiFiMode = WiFi.getMode();
+					if ((WiFiMode == WIFI_AP) || (WiFiMode == WIFI_AP_STA)) {
+						JsonObject &APInfo = Root.createNestedObject(FC("AP"));
+						{
+							// Collect AP info
+							struct softap_config apConfig;
+							if (wifi_softap_get_config(&apConfig)) {
+								if (apConfig.ssid_len) {
+									String apSSID((char *)apConfig.ssid, apConfig.ssid_len);
+									APInfo[FC("SSID")] = apSSID;
+								} else APInfo[FC("SSID")] = (char *)apConfig.ssid;
+								APInfo[FC("Channel")] = apConfig.channel;
+								APInfo[FC("Auth")] = PrintAuth(apConfig.authmode);
+							} else {
+								ESPAPP_DEBUG("WARNING: failed to retrieve WiFi base station info.\n");
+							}
+						}
+						{
+							// Collect connected clients
+							JsonArray &Clients = APInfo.createNestedArray(FC("Stations"));
+							struct station_info *staInfo = wifi_softap_get_station_info();
+							while (staInfo) {
+								JsonArray &Station = Clients.createNestedArray();
+								Station.add(PrintMAC(staInfo->bssid));
+								Station.add(PrintIP(staInfo->ip.addr));
+								staInfo	= STAILQ_NEXT(staInfo, next);
+							}
+							wifi_softap_free_station_info();
+						}
+					}
+					if ((WiFiMode == WIFI_STA) || (WiFiMode == WIFI_AP_STA)) {
+						JsonObject &STAInfo = Root.createNestedObject(FC("STA"));
+						{
+							struct station_config staConfig;
+							if (wifi_station_get_config(&staConfig)) {
+								STAInfo[FC("APName")] = (char *)staConfig.ssid;
+								STAInfo[FC("Connected")] = APConnected;
+								if (APConnected) {
+									STAInfo[FC("APChannel")] = APCHAN;
+									STAInfo[FC("APMAC")] = PrintMAC(APMAC);
+								} else {
+									if (staConfig.bssid_set) {
+										STAInfo[FC("APMAC")] = PrintMAC(staConfig.bssid);
+									}
+								}
+							} else {
+								ESPAPP_DEBUG("WARNING: failed to retrieve WiFi client info.\n");
+							}
+						}
+					}
+					request.send(response);
+				});
+				if (isCaptive) {
+					Handler.addFilter([](AsyncWebRequest const &request) {
+						return request.host().equalsIgnoreCase(AppConfig.Hostname);
+					});
+				}
+			}
+
+			{
 				auto &Handler = AppGlobal.webServer->addHandler(
-					new AsyncAPIAPScanWebHandler(FC(PORTAL_API_APSCAN))
+					new AsyncAPIAPScanWebHandler(FC(PORTAL_API_HWCTL_APSCAN))
 				);
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
@@ -1827,12 +1914,7 @@ static void APScan_Finished(bss_info* result, STATUS status) {
 		APList.append(std::move(entry));
 
 		ESPAPP_DEBUGVVDO({
-			String APEntry;
-			for (int i = 0; i < 6; i++) {
-				if (APEntry) APEntry.concat(':');
-				APEntry.concat(HexLookup_UC[scanEntry->bssid[i] >> 4 & 0xF]);
-				APEntry.concat(HexLookup_UC[scanEntry->bssid[i] & 0xF]);
-			}
+			String APEntry = PrintMAC(scanEntry->bssid);
 			if (!scanEntry->is_hidden) {
 				APEntry.concat(' ');
 				APEntry.concat('[');
@@ -1851,14 +1933,7 @@ static void APScan_Finished(bss_info* result, STATUS status) {
 			if (scanEntry->wps) APEntry.concat(F(",WPS"));
 			APEntry.concat(')');
 			APEntry.concat(' ');
-			switch (scanEntry->authmode) {
-				case AUTH_OPEN: APEntry.concat(F("OPEN")); break;
-				case AUTH_WEP: APEntry.concat(F("WEP")); break;
-				case AUTH_WPA_PSK: APEntry.concat(F("WPA-PSK")); break;
-				case AUTH_WPA2_PSK: APEntry.concat(F("WPA2-PSK")); break;
-				case AUTH_WPA_WPA2_PSK: APEntry.concat(F("WPA/WPA2-PSK")); break;
-				default: APEntry.concat(F("UNSUPPORTED")); break;
-			}
+			APEntry.concat(PrintAuth(scanEntry->authmode));
 			ESPAPP_LOG("AP #%d: %s\n",apCnt,APEntry.c_str());
 		});
 		scanEntry = STAILQ_NEXT(scanEntry, next);

@@ -72,14 +72,7 @@ void AsyncAPIAPScanWebHandler::_handleRequest(AsyncWebRequest &request) {
 	Appliance_EnumAPList([&](APEntry const &entry) {
 		JsonObject& AP = APs.createNestedObject();
 		if (entry.SSID) AP[FC("SSID")] = entry.SSID;
-		{
-			String MACString;
-			for (int i = 0; i < 6; i++) {
-				MACString.concat(HexLookup_UC[entry.MAC[i] >> 4 & 0xF]);
-				MACString.concat(HexLookup_UC[entry.MAC[i] & 0xF]);
-			}
-			AP[FC("MAC")] = MACString;
-		}
+		AP[FC("MAC")] = PrintMAC(entry.MAC);
 		{
 			JsonArray& RF = AP.createNestedArray(FC("RF"));
 			RF.add(entry.Channel);
@@ -92,14 +85,7 @@ void AsyncAPIAPScanWebHandler::_handleRequest(AsyncWebRequest &request) {
 		}
 		{
 			JsonArray& Auth = AP.createNestedArray(FC("Auth"));
-			switch (entry.Auth) {
-				case AUTH_OPEN: Auth.add(F("OPEN")); break;
-				case AUTH_WEP: Auth.add(F("WEP")); break;
-				case AUTH_WPA_PSK: Auth.add(F("WPA-PSK")); break;
-				case AUTH_WPA2_PSK: Auth.add(F("WPA2-PSK")); break;
-				case AUTH_WPA_WPA2_PSK: Auth.add(F("WPA/WPA2-PSK")); break;
-				default: Auth.add(F("UNSUPPORTED")); break;
-			}
+			Auth.add(PrintAuth(entry.Auth));
 			if (entry.Features & AP_WPS) Auth.add(F("WPS"));
 		}
 		return true;
