@@ -16,13 +16,13 @@ bool AsyncAPIAPScanWebHandler::_checkContinue(AsyncWebRequest &request, bool con
 	if (qlen > 1) {
 		ESPWSAPSCAN_DEBUG("[%s] Received %d queries, expect <= 1\n",
 			request._remoteIdent.c_str(), qlen);
-		request.send_P(400, PSTR("Invalid query count (expect <=1)"), F("text/plain"));
+		request.send_P(400, PSTR("Invalid query count (expect <=1)"), FT("text/plain"));
 		return false;
 	}
 	if (qlen) {
 		bool Understood = false;
 		request.enumQueries([&](const AsyncWebQuery &Q) {
-			if (Q.name == FC("force")) {
+			if (Q.name == FT("force")) {
 				ForceScan = true;
 				if (Q.value) {
 					ESPWSAPSCAN_DEBUG("[%s] Unexpected query value %s='%s'\n",
@@ -35,7 +35,7 @@ bool AsyncAPIAPScanWebHandler::_checkContinue(AsyncWebRequest &request, bool con
 			return true;
 		});
 		if (!Understood) {
-			request.send_P(400, PSTR("Invalid query parameter"), F("text/plain"));
+			request.send_P(400, PSTR("Invalid query parameter"), FT("text/plain"));
 			return false;
 		}
 	}
@@ -54,7 +54,7 @@ void AsyncAPIAPScanWebHandler::_handleRequest(AsyncWebRequest &request) {
 		ESPWSAPSCAN_DEBUGV("[%s] Unable to start AP scan\n",
 			request._remoteIdent.c_str());
 		request.send_P(503, PSTR("Unable to start AP scan, try again later."),
-			F("text/plain"));
+			FT("text/plain"));
 		return;
 	}
 	ForceScan = false;
@@ -71,10 +71,10 @@ void AsyncAPIAPScanWebHandler::_handleRequest(AsyncWebRequest &request) {
 
 	Appliance_EnumAPList([&](APEntry const &entry) {
 		JsonObject& AP = APs.createNestedObject();
-		if (entry.SSID) AP[FC("SSID")] = entry.SSID;
-		AP[FC("MAC")] = PrintMAC(entry.MAC);
+		if (entry.SSID) AP[FT("SSID")] = entry.SSID;
+		AP[FT("MAC")] = PrintMAC(entry.MAC);
 		{
-			JsonArray& RF = AP.createNestedArray(FC("RF"));
+			JsonArray& RF = AP.createNestedArray(FT("RF"));
 			RF.add(entry.Channel);
 			RF.add(entry.RSSI);
 			String PHYs;
@@ -84,9 +84,9 @@ void AsyncAPIAPScanWebHandler::_handleRequest(AsyncWebRequest &request) {
 			RF.add(PHYs);
 		}
 		{
-			JsonArray& Auth = AP.createNestedArray(FC("Auth"));
+			JsonArray& Auth = AP.createNestedArray(FT("Auth"));
 			Auth.add(PrintAuth(entry.Auth));
-			if (entry.Features & AP_WPS) Auth.add(F("WPS"));
+			if (entry.Features & AP_WPS) Auth.add(FT("WPS"));
 		}
 		return true;
 	});

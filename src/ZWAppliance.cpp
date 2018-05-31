@@ -85,13 +85,13 @@ typedef enum {
 ESPAPP_DEBUGDO(
 static PGM_P StrAppState(AppState state) {
 	switch (state) {
-		case APP_STARTUP: return PSTR_C("Startup");
-		case APP_INIT: return PSTR_C("Init");
-		case APP_PORTAL: return PSTR_C("Portal");
-		case APP_SERVICE: return PSTR_C("Service");
-		case APP_DEVRESET: return PSTR_C("Device-Reset");
-		case APP_DEVRESTART: return PSTR_C("Device-Restart");
-		default: return PSTR_C("<Unknown>");
+		case APP_STARTUP: return PSTR_L("Startup");
+		case APP_INIT: return PSTR_L("Init");
+		case APP_PORTAL: return PSTR_L("Portal");
+		case APP_SERVICE: return PSTR_L("Service");
+		case APP_DEVRESET: return PSTR_L("Device-Reset");
+		case APP_DEVRESTART: return PSTR_L("Device-Restart");
+		default: return PSTR_L("<Unknown>");
 	}
 }
 )
@@ -315,7 +315,7 @@ static void init_config_defaults() {
 	AppConfig.WLAN_WPS = true;
 	AppConfig.Init_Retry_Count = CONFIG_DEFAULT_INIT_RETRY_COUNT;
 	AppConfig.Init_Retry_Cycle = CONFIG_DEFAULT_INIT_RETRY_CYCLE;
-	AppConfig.Hostname = String(FC(CONFIG_DEFAULT_HOSTNAME_PFX)) +
+	AppConfig.Hostname = String(FL(CONFIG_DEFAULT_HOSTNAME_PFX)) +
 		String(ESP.getChipId(), 16);
 	AppConfig.Portal_Timeout = CONFIG_DEFAULT_PORTAL_TIMEOUT;
 	AppConfig.Portal_APTest = CONFIG_DEFAULT_PORTAL_APTEST;
@@ -325,14 +325,14 @@ static void init_config_defaults() {
 
 static int8_t load_config_timezone(JsonObject const &obj, TimeChangeRule &r) {
 	if (obj.success()) {
-		String Name = obj[FC("Name")] | String(FC("Local")).c_str();
+		String Name = obj[FPSTR(CONFIGKEY_TZ_Name)] | String(FL("Local")).c_str();
 		// The following parameters are mandatory!
 		// Use invalid default value to simplify error handling
-		uint8_t Week = obj[FC("Week")] | -1;
-		uint8_t DoW = obj[FC("DayOfWeek")] | -1;
-		uint8_t Month = obj[FC("Month")] | -1;
-		uint8_t Hour = obj[FC("Hour")] | -1;
-		int Offset = obj[FC("Offset")] | INT_MAX;
+		uint8_t Week = obj[FPSTR(CONFIGKEY_TZ_Week)] | -1;
+		uint8_t DoW = obj[FPSTR(CONFIGKEY_TZ_DayOfWeek)] | -1;
+		uint8_t Month = obj[FPSTR(CONFIGKEY_TZ_Month)] | -1;
+		uint8_t Hour = obj[FPSTR(CONFIGKEY_TZ_Hour)] | -1;
+		int Offset = obj[FPSTR(CONFIGKEY_TZ_Offset)] | INT_MAX;
 		// Handle Name
 		if (Name.length() > 5) {
 			ESPAPP_DEBUG("WARNING: Timezone rule name too long, truncated to '%s'\n",
@@ -376,11 +376,11 @@ static int8_t load_config_timezone(JsonObject const &obj, TimeChangeRule &r) {
 }
 
 static WiFiSleepType load_config_powersaving(String const &spec, WiFiSleepType defval) {
-	if (spec.equalsIgnoreCase(FC(POWER_SAVING_NONE))) {
+	if (spec.equalsIgnoreCase(FL(POWER_SAVING_NONE))) {
 		return WIFI_NONE_SLEEP ;
-	} else if (spec.equalsIgnoreCase(FC(POWER_SAVING_MODEM))) {
+	} else if (spec.equalsIgnoreCase(FL(POWER_SAVING_MODEM))) {
 		return WIFI_MODEM_SLEEP ;
-	} else if (spec.equalsIgnoreCase(FC(POWER_SAVING_LIGHT))) {
+	} else if (spec.equalsIgnoreCase(FL(POWER_SAVING_LIGHT))) {
 		return WIFI_LIGHT_SLEEP ;
 	} else {
 		if (spec) {
@@ -392,39 +392,39 @@ static WiFiSleepType load_config_powersaving(String const &spec, WiFiSleepType d
 }
 
 static void load_config_json(JsonObject const &obj) {
-	AppConfig.Production = obj[FC("Production")] | AppConfig.Production;
-	AppConfig.PersistWLAN = obj[FC("PersistWLAN")] | AppConfig.PersistWLAN;
+	AppConfig.Production = obj[FPSTR(CONFIGKEY_Production)] | AppConfig.Production;
+	AppConfig.PersistWLAN = obj[FPSTR(CONFIGKEY_PersistWLAN)] | AppConfig.PersistWLAN;
 
-	AppConfig.PowerSaving = load_config_powersaving(obj[FC("PowerSaving")], AppConfig.PowerSaving);
-	AppConfig.WiFi_Power = obj[FC("WiFi_Power")] | AppConfig.WiFi_Power;
+	AppConfig.PowerSaving = load_config_powersaving(obj[FPSTR(CONFIGKEY_PowerSaving)], AppConfig.PowerSaving);
+	AppConfig.WiFi_Power = obj[FPSTR(CONFIGKEY_WiFi_Power)] | AppConfig.WiFi_Power;
 	if ((AppConfig.WiFi_Power < 0) || (AppConfig.WiFi_Power> WIFI_POWER_MAX)) {
 		ESPAPP_LOG("WARNING: Invalid WiFi output power configuration, "
 			"use default value!\n");
 		AppConfig.WiFi_Power = CONFIG_DEFAULT_WIFI_POWER;
 	}
 
-	AppConfig.WLAN_AP_Name = obj[FC("WLAN_AP_Name")] | AppConfig.WLAN_AP_Name.c_str();
-	AppConfig.WLAN_AP_Pass = obj[FC("WLAN_AP_Pass")] | AppConfig.WLAN_AP_Pass.c_str();
-	AppConfig.WLAN_WPS = obj[FC("WLAN_WPS")] | AppConfig.WLAN_WPS;
+	AppConfig.WLAN_AP_Name = obj[FPSTR(CONFIGKEY_WLAN_AP_Name)] | AppConfig.WLAN_AP_Name.c_str();
+	AppConfig.WLAN_AP_Pass = obj[FPSTR(CONFIGKEY_WLAN_AP_Pass)] | AppConfig.WLAN_AP_Pass.c_str();
+	AppConfig.WLAN_WPS = obj[FPSTR(CONFIGKEY_WLAN_WPS)] | AppConfig.WLAN_WPS;
 
-	AppConfig.Init_Retry_Count = obj[FC("Init_Retry_Count")] | AppConfig.Init_Retry_Count;
-	AppConfig.Init_Retry_Cycle = obj[FC("Init_Retry_Cycle")] | AppConfig.Init_Retry_Cycle;
+	AppConfig.Init_Retry_Count = obj[FPSTR(CONFIGKEY_Init_Retry_Count)] | AppConfig.Init_Retry_Count;
+	AppConfig.Init_Retry_Cycle = obj[FPSTR(CONFIGKEY_Init_Retry_Cycle)] | AppConfig.Init_Retry_Cycle;
 
-	AppConfig.Hostname = obj[FC("Hostname")] | AppConfig.Hostname.c_str();
-	AppConfig.Portal_Timeout = obj[FC("Portal_Timeout")] | AppConfig.Portal_Timeout;
-	AppConfig.Portal_APTest = obj[FC("Portal_APTest")] | AppConfig.Portal_APTest;
+	AppConfig.Hostname = obj[FPSTR(CONFIGKEY_Hostname)] | AppConfig.Hostname.c_str();
+	AppConfig.Portal_Timeout = obj[FPSTR(CONFIGKEY_Portal_Timeout)] | AppConfig.Portal_Timeout;
+	AppConfig.Portal_APTest = obj[FPSTR(CONFIGKEY_Portal_APTest)] | AppConfig.Portal_APTest;
 
-	AppConfig.NTP_Server = obj[FC("NTP_Server")] | AppConfig.NTP_Server.c_str();
+	AppConfig.NTP_Server = obj[FPSTR(CONFIGKEY_NTP_Server)] | AppConfig.NTP_Server.c_str();
 	do {
 		// Load timezone configurations
 		TimeChangeRule TZR, TZD;
-		if (load_config_timezone(obj[FC("TimeZone-Regular")].as<JsonObject&>(), TZR) != 0) {
+		if (load_config_timezone(obj[FPSTR(CONFIGKEY_TimeZone_Regular)].as<JsonObject&>(), TZR) != 0) {
 			ESPAPP_LOG("WARNING: Failed to parse regular timezone configuration, "
 				"use default timezone!\n");
 			break;
 		}
-		if (load_config_timezone(obj[FC("TimeZone-Daylight")].as<JsonObject&>(), TZR) != 0) {
-			if (!obj.containsKey(FC("TimeZone-Daylight"))) {
+		if (load_config_timezone(obj[FPSTR(CONFIGKEY_TimeZone_Daylight)].as<JsonObject&>(), TZD) != 0) {
+			if (!obj.containsKey(FPSTR(CONFIGKEY_TimeZone_Daylight))) {
 				ESPAPP_LOG("WARNING: Failed to parse daylight-saving timezone configuration, "
 					"use regular timezone!\n");
 			}
@@ -436,7 +436,7 @@ static void load_config_json(JsonObject const &obj) {
 
 static JsonManagerResults load_config(String const &filename,
 	std::function<void(JsonObject const &obj)> const &load_cb) {
-	auto ConfigDir = get_dir(FC(CONFIG_DIR));
+	auto ConfigDir = get_dir(FL(CONFIG_DIR));
 	return JsonManager(ConfigDir, filename, true,
 		[&](JsonObject &obj, BoundedDynamicJsonBuffer &parsebuf) {
 			load_cb(obj);
@@ -448,7 +448,7 @@ static JsonManagerResults load_config(String const &filename,
 
 static JsonManagerResults update_config(String const &filename,
 	JsonObjectCallback const &update_cb) {
-	auto ConfigDir = get_dir(FC(CONFIG_DIR));
+	auto ConfigDir = get_dir(FL(CONFIG_DIR));
 	return JsonManager(ConfigDir, filename, true, update_cb, [&](File &file) {
 		return file.truncate(0);
 	});
@@ -479,14 +479,14 @@ static void InitBootTime(RTCMemory &RTCMem) {
 
 static PGM_P resetReasonToStr(uint32_t reason) {
 	switch (reason) {
-		case 0: return PSTR_C("Power on");
-		case 1: return PSTR_C("Hard WDT");
-		case 2: return PSTR_C("Fatal Exception");
-		case 3: return PSTR_C("Soft WDT");
-		case 4: return PSTR_C("Soft reset");
-		case 5: return PSTR_C("Deep sleep");
-		case 6: return PSTR_C("Hard reset");
-		default: return PSTR_C("Unknown");
+		case 0: return PSTR_L("Power on");
+		case 1: return PSTR_L("Hard WDT");
+		case 2: return PSTR_L("Fatal Exception");
+		case 3: return PSTR_L("Soft WDT");
+		case 4: return PSTR_L("Soft reset");
+		case 5: return PSTR_L("Deep sleep");
+		case 6: return PSTR_L("Hard reset");
+		default: return PSTR_L("Unknown");
 	}
 }
 
@@ -500,7 +500,7 @@ void setup() {
 	Serial.begin(115200);
 	delay(100);
 	Serial.println();
-	Serial.println(FC("ESP8266 ZWAppliance Core v" ZWAPP_VERSION));
+	Serial.println(FL("ESP8266 ZWAppliance Core v" ZWAPP_VERSION));
 
 	// Initialize/check RTC memory
 	RTCMemory &RTCMem = RTCMemory::Manager();
@@ -833,7 +833,7 @@ static void loop_INIT() {
 							AppConfig.WLAN_AP_Pass.c_str());
 						auto JMRet = update_config(APPLIANCE_CONFIG_FILE,
 							[&](JsonObject & obj, BoundedDynamicJsonBuffer & buf) {
-								obj[FC("WLAN_AP_Pass")] = AppConfig.WLAN_AP_Pass;
+								obj[FL("WLAN_AP_Pass")] = AppConfig.WLAN_AP_Pass;
 								return true;
 							});
 						if (JMRet != JSONMAN_OK_UPDATED) {
@@ -965,7 +965,7 @@ void Portal_WebServer_RespondBuiltInData(AsyncWebRequest &request,
 
 void Portal_WebServer_RespondFileOrBuiltIn(AsyncWebRequest &request,
 	String const &filename, PGM_P defdata, int code = 200) {
-	auto PortalDir = get_dir(FC(PORTAL_DIR));
+	auto PortalDir = get_dir(FL(PORTAL_DIR));
 	File PageData = PortalDir.openFile(filename, "r");
 	if (PageData) {
 		request.send(PageData, filename, String::EMPTY, code);
@@ -1032,24 +1032,24 @@ static void Portal_WebServer_Operations() {
 		} break;
 
 		case PORTAL_ACCOUNT: {
-			auto ConfigDir = get_dir(FC(CONFIG_DIR));
+			auto ConfigDir = get_dir(FL(CONFIG_DIR));
 			ESPAPP_DEBUG("Loading portal accounts...\n");
 
 			AppGlobal.webAccounts = new HTTPDigestAccountAuthority(AppConfig.Hostname);
-			File AccountData = ConfigDir.openFile(FC(PORTAL_ACCOUNTS_FILE), "r");
+			File AccountData = ConfigDir.openFile(FL(PORTAL_ACCOUNTS_FILE), "r");
 			if (AccountData) {
 				int AccountCnt = AppGlobal.webAccounts->loadAccounts(AccountData);
 				ESPAPP_DEBUG("* Loaded %d accounts.\n", AccountCnt);
-				if (AppGlobal.webAccounts->getIdentity(FC(PORTAL_ADMIN_USER)) == IdentityProvider::UNKNOWN) {
+				if (AppGlobal.webAccounts->getIdentity(FL(PORTAL_ADMIN_USER)) == IdentityProvider::UNKNOWN) {
 					ESPAPP_DEBUG("WARNING: default administrator account '%s' not found, "
 						"re-initializing...\n",
-						SFPSTR(FC(PORTAL_ADMIN_USER)));
-					AppGlobal.webAccounts->addAccount(FC(PORTAL_ADMIN_USER), FC(PORTAL_ADMIN_USER));
+						SFPSTR(FL(PORTAL_ADMIN_USER)));
+					AppGlobal.webAccounts->addAccount(FL(PORTAL_ADMIN_USER), FL(PORTAL_ADMIN_USER));
 				}
 			} else {
 				ESPAPP_DEBUG("WARNING: accounts file '%s' not found, using built-in accounts...\n",
-					SFPSTR(FC(PORTAL_ACCOUNTS_FILE)));
-				AppGlobal.webAccounts->addAccount(FC(PORTAL_ADMIN_USER), FC(PORTAL_ADMIN_USER));
+					SFPSTR(FL(PORTAL_ACCOUNTS_FILE)));
+				AppGlobal.webAccounts->addAccount(FL(PORTAL_ADMIN_USER), FL(PORTAL_ADMIN_USER));
 			}
 			AppGlobal.webAuthSessions = new SessionAuthority(AppGlobal.webAccounts,
 				AppGlobal.webAccounts);
@@ -1057,11 +1057,11 @@ static void Portal_WebServer_Operations() {
 		} break;
 
 		case PORTAL_ACCESSCTRL: {
-			auto ConfigDir = get_dir(FC(CONFIG_DIR));
+			auto ConfigDir = get_dir(FL(CONFIG_DIR));
 			ESPAPP_DEBUG("Loading access control...\n");
 			{
 				File ACLData = Portal_WebServer_CheckRestoreRes(ConfigDir,
-					FC(PORTAL_ACCESS_FILE), PORTAL_DEFAULT_ACL);
+					FL(PORTAL_ACCESS_FILE), PORTAL_DEFAULT_ACL);
 				if (ACLData) {
 					AppGlobal.webServer->configAuthority(*AppGlobal.webAuthSessions, ACLData);
 				} else {
@@ -1071,27 +1071,27 @@ static void Portal_WebServer_Operations() {
 			}
 
 			AuthSession fakeAnonyAuth(IdentityProvider::ANONYMOUS, nullptr);
-			if (AppGlobal.webServer->_checkACL(HTTP_GET, FC(PORTAL_ROOT), &fakeAnonyAuth) != ACL_ALLOWED) {
+			if (AppGlobal.webServer->_checkACL(HTTP_GET, FL(PORTAL_ROOT), &fakeAnonyAuth) != ACL_ALLOWED) {
 				ESPAPP_DEBUG("WARNING: correcting ACL to allow '%s' access to portal root...\n",
-					SFPSTR(FC(ANONYMOUS_ID)));
-				AppGlobal.webServer->_prependACL(FC(PORTAL_ROOT), HTTP_BASIC_READ,
+					SFPSTR(FL(ANONYMOUS_ID)));
+				AppGlobal.webServer->_prependACL(FL(PORTAL_ROOT), HTTP_BASIC_READ,
 					{nullptr, {&IdentityProvider::ANONYMOUS}});
 			}
 			{
-				auto &AdminIdent = AppGlobal.webAccounts->getIdentity(FC(PORTAL_ADMIN_USER));
+				auto &AdminIdent = AppGlobal.webAccounts->getIdentity(FL(PORTAL_ADMIN_USER));
 				AuthSession fakeAdminAuth(AdminIdent, nullptr);
-				if (AppGlobal.webServer->_checkACL(HTTP_PUT, FC(PORTAL_FSDAV_ROOT), &fakeAdminAuth) != ACL_ALLOWED ||
-					AppGlobal.webServer->_checkACL(HTTP_PUT, FC(PORTAL_FSDAV_ROOT), &fakeAnonyAuth) == ACL_ALLOWED) {
+				if (AppGlobal.webServer->_checkACL(HTTP_PUT, FL(PORTAL_FSDAV_ROOT), &fakeAdminAuth) != ACL_ALLOWED ||
+					AppGlobal.webServer->_checkACL(HTTP_PUT, FL(PORTAL_FSDAV_ROOT), &fakeAnonyAuth) == ACL_ALLOWED) {
 					ESPAPP_DEBUG("WARNING: correcting ACL to allow '%s' exclusive access to '%s'...\n",
-						SFPSTR(FC(PORTAL_ADMIN_USER)), SFPSTR(FC(PORTAL_FSDAV_ROOT)));
-					AppGlobal.webServer->_prependACL(FC(PORTAL_FSDAV_ROOT), HTTP_ANY,
+						SFPSTR(FL(PORTAL_ADMIN_USER)), SFPSTR(FL(PORTAL_FSDAV_ROOT)));
+					AppGlobal.webServer->_prependACL(FL(PORTAL_FSDAV_ROOT), HTTP_ANY,
 						{nullptr, {&AdminIdent}});
 				}
-				if (AppGlobal.webServer->_checkACL(HTTP_GET, FC(PORTAL_API_HWCTL), &fakeAdminAuth) != ACL_ALLOWED ||
-					AppGlobal.webServer->_checkACL(HTTP_GET, FC(PORTAL_API_HWCTL), &fakeAnonyAuth) == ACL_ALLOWED) {
+				if (AppGlobal.webServer->_checkACL(HTTP_GET, FL(PORTAL_API_HWCTL), &fakeAdminAuth) != ACL_ALLOWED ||
+					AppGlobal.webServer->_checkACL(HTTP_GET, FL(PORTAL_API_HWCTL), &fakeAnonyAuth) == ACL_ALLOWED) {
 					ESPAPP_DEBUG("WARNING: correcting ACL to allow '%s' exclusive access to '%s'...\n",
-						SFPSTR(FC(PORTAL_ADMIN_USER)), SFPSTR(FC(PORTAL_API_HWCTL)));
-					AppGlobal.webServer->_prependACL(FC(PORTAL_API_HWCTL), HTTP_BASIC_READ,
+						SFPSTR(FL(PORTAL_ADMIN_USER)), SFPSTR(FL(PORTAL_API_HWCTL)));
+					AppGlobal.webServer->_prependACL(FL(PORTAL_API_HWCTL), HTTP_BASIC_READ,
 						{nullptr, {&AdminIdent}});
 				}
 			}
@@ -1099,16 +1099,16 @@ static void Portal_WebServer_Operations() {
 		} break;
 
 		case PORTAL_FILES: {
-			auto PortalDir = get_dir(FC(PORTAL_DIR));
+			auto PortalDir = get_dir(FL(PORTAL_DIR));
 
 			PortalStaticResMap = new LinkedList<StaticResDefaults>(nullptr);
-			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_PAGE_OTA), PORTAL_RESDATA_OTA_HTML});
-			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_RES_MD5JS), PORTAL_RESDATA_MD5_JS});
-			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_RES_OTACOREJS), PORTAL_RESDATA_OTACORE_JS});
+			PortalStaticResMap->append({PSTR_L(PORTAL_ROOT PORTAL_PAGE_OTA), PORTAL_RESDATA_OTA_HTML});
+			PortalStaticResMap->append({PSTR_L(PORTAL_ROOT PORTAL_RES_MD5JS), PORTAL_RESDATA_MD5_JS});
+			PortalStaticResMap->append({PSTR_L(PORTAL_ROOT PORTAL_RES_OTACOREJS), PORTAL_RESDATA_OTACORE_JS});
 
-			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_PAGE_SYSCONFIG), PORTAL_RESDATA_SYSCONFIG_HTML});
-			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_RES_JQUERYJS), PORTAL_RESDATA_JQUERY_JS});
-			PortalStaticResMap->append({PSTR_C(PORTAL_ROOT PORTAL_RES_APSCANCOREJS), PORTAL_RESDATA_APSCANCORE_JS});
+			PortalStaticResMap->append({PSTR_L(PORTAL_ROOT PORTAL_PAGE_SYSCONFIG), PORTAL_RESDATA_SYSCONFIG_HTML});
+			PortalStaticResMap->append({PSTR_L(PORTAL_ROOT PORTAL_RES_JQUERYJS), PORTAL_RESDATA_JQUERY_JS});
+			PortalStaticResMap->append({PSTR_L(PORTAL_ROOT PORTAL_RES_APSCANCOREJS), PORTAL_RESDATA_APSCANCORE_JS});
 
 			AppGlobal.wsSteps = PORTAL_START;
 		} break;
@@ -1120,7 +1120,7 @@ static void Portal_WebServer_Operations() {
 				// Redirect all request to this host (and hence being captive)
 				auto pHandler = new AsyncHostRedirWebHandler(AppConfig.Hostname, HTTP_ANY);
 				pHandler->altPath = PORTAL_ROOT;
-				pHandler->psvPaths.append(FC(PORTAL_WPAD_FILE));
+				pHandler->psvPaths.append(FL(PORTAL_WPAD_FILE));
 				AppGlobal.webServer->addHandler(pHandler).addFilter(
 					[&](AsyncWebRequest const &request) {
 						// Record last activity time stamp
@@ -1138,7 +1138,7 @@ static void Portal_WebServer_Operations() {
 
 			{
 				if (isCaptive) {
-					auto &Handler = AppGlobal.webServer->on(FC(PORTAL_WPAD_FILE"$"),
+					auto &Handler = AppGlobal.webServer->on(FL(PORTAL_WPAD_FILE"$"),
 						[](AsyncWebRequest &request) {
 							request.send(404);
 						});
@@ -1149,10 +1149,10 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_HWCTL_DEVRESET"$"),
+				auto &Handler = AppGlobal.webServer->on(FL(PORTAL_API_HWCTL_DEVRESET"$"),
 					[](AsyncWebRequest &request) {
 						Portal_WebServer_RespondFileOrBuiltIn(request,
-							FC(PORTAL_PAGE_DEVRESET), PORTAL_RESDATA_DEVRESET_HTML);
+							FL(PORTAL_PAGE_DEVRESET), PORTAL_RESDATA_DEVRESET_HTML);
 						AppGlobal.wsSteps = PORTAL_DEVRESET;
 					});
 				if (isCaptive) {
@@ -1163,10 +1163,10 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_HWCTL_DEVRESTART"$"),
+				auto &Handler = AppGlobal.webServer->on(FL(PORTAL_API_HWCTL_DEVRESTART"$"),
 					[](AsyncWebRequest &request) {
 						Portal_WebServer_RespondFileOrBuiltIn(request,
-							FC(PORTAL_PAGE_DEVRESTART), PORTAL_RESDATA_DEVRESTART_HTML);
+							FL(PORTAL_PAGE_DEVRESTART), PORTAL_RESDATA_DEVRESTART_HTML);
 						AppGlobal.wsSteps = PORTAL_DEVRESTART;
 					});
 				if (isCaptive) {
@@ -1177,10 +1177,10 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_HWMON_HEAP"$"),
+				auto &Handler = AppGlobal.webServer->on(FL(PORTAL_API_HWMON_HEAP"$"),
 					[](AsyncWebRequest &request) {
 						size_t FreeHeap = ESP.getFreeHeap();
-						request.send(200, String(FreeHeap), FC("text/plain"));
+						request.send(200, String(FreeHeap), FL("text/plain"));
 					});
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
@@ -1190,10 +1190,10 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_HWMON_UPTIME"$"),
+				auto &Handler = AppGlobal.webServer->on(FL(PORTAL_API_HWMON_UPTIME"$"),
 					[](AsyncWebRequest &request) {
 						time_t UpTime = GetCurrentTS() - AppGlobal.StartTS;
-						request.send(200, String(UpTime), FC("text/plain"));
+						request.send(200, String(UpTime), FL("text/plain"));
 					});
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
@@ -1203,14 +1203,14 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_HWMON),
+				auto &Handler = AppGlobal.webServer->on(FL(PORTAL_API_HWMON),
 					[](AsyncWebRequest &request) {
 						size_t FreeHeap = ESP.getFreeHeap();
 						time_t UpTime = GetCurrentTS() - AppGlobal.StartTS;
 						AsyncJsonResponse * response =
 							AsyncJsonResponse::CreateNewObjectResponse();
-						response->root[FC("heap")] = FreeHeap;
-						response->root[FC("uptime")] = UpTime;
+						response->root[FL("heap")] = FreeHeap;
+						response->root[FL("uptime")] = UpTime;
 						request.send(response);
 					});
 				if (isCaptive) {
@@ -1221,9 +1221,9 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_VERSION_ZWAPP"$"),
+				auto &Handler = AppGlobal.webServer->on(FL(PORTAL_API_VERSION_ZWAPP"$"),
 				[](AsyncWebRequest &request) {
-					request.send_P(200, PSTR_C(ZWAPP_VERSION), FC("text/plain"));
+					request.send_P(200, PSTR_L(ZWAPP_VERSION), FL("text/plain"));
 				});
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
@@ -1233,7 +1233,7 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_STATE_CLOCK"$"),
+				auto &Handler = AppGlobal.webServer->on(FL(PORTAL_API_STATE_CLOCK"$"),
 					[](AsyncWebRequest &request) {
 						time_t utc_clock = sntp_get_current_timestamp();
 						TimeChangeRule* TZ;
@@ -1242,16 +1242,16 @@ static void Portal_WebServer_Operations() {
 						localtime_r(&clock, &tm_out);
 						AsyncJsonResponse * response =
 							AsyncJsonResponse::CreateNewObjectResponse();
-						response->root[FC("u")] = utc_clock;
-						response->root[FC("Y")] = tm_out.tm_year+1900;
-						response->root[FC("m")] = tm_out.tm_mon+1;
-						response->root[FC("d")] = tm_out.tm_mday;
-						response->root[FC("w")] = tm_out.tm_wday;
-						response->root[FC("H")] = tm_out.tm_hour;
-						response->root[FC("M")] = tm_out.tm_min;
-						response->root[FC("s")] = tm_out.tm_sec;
-						response->root[FC("Z")] = TZ->abbrev;
-						response->root[FC("z")] = TZ->offset;
+						response->root[FL("u")] = utc_clock;
+						response->root[FL("Y")] = tm_out.tm_year+1900;
+						response->root[FL("m")] = tm_out.tm_mon+1;
+						response->root[FL("d")] = tm_out.tm_mday;
+						response->root[FL("w")] = tm_out.tm_wday;
+						response->root[FL("H")] = tm_out.tm_hour;
+						response->root[FL("M")] = tm_out.tm_min;
+						response->root[FL("s")] = tm_out.tm_sec;
+						response->root[FL("Z")] = TZ->abbrev;
+						response->root[FL("z")] = TZ->offset;
 						request.send(response);
 					});
 				if (isCaptive) {
@@ -1262,31 +1262,34 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->on(FC(PORTAL_API_STATE_WLAN"$"),
+				auto &Handler = AppGlobal.webServer->on(FL(PORTAL_API_STATE_WLAN"$"),
 				[](AsyncWebRequest &request) {
 					AsyncJsonResponse * response =
 						AsyncJsonResponse::CreateNewObjectResponse();
 					JsonObject &Root = response->root.as<JsonObject&>();
 					auto WiFiMode = WiFi.getMode();
 					if ((WiFiMode == WIFI_AP) || (WiFiMode == WIFI_AP_STA)) {
-						JsonObject &APInfo = Root.createNestedObject(FC("AP"));
+						JsonObject &APInfo = Root.createNestedObject(FL("AP"));
 						{
 							// Collect AP info
 							struct softap_config apConfig;
 							if (wifi_softap_get_config(&apConfig)) {
 								if (apConfig.ssid_len) {
 									String apSSID((char *)apConfig.ssid, apConfig.ssid_len);
-									APInfo[FC("SSID")] = apSSID;
-								} else APInfo[FC("SSID")] = (char *)apConfig.ssid;
-								APInfo[FC("Channel")] = apConfig.channel;
-								APInfo[FC("Auth")] = PrintAuth(apConfig.authmode);
+									APInfo[FL("SSID")] = apSSID;
+								} else APInfo[FL("SSID")] = (char *)apConfig.ssid;
+								APInfo[FL("Channel")] = apConfig.channel;
+								APInfo[FL("Auth")] = PrintAuth(apConfig.authmode);
+								if (apConfig.authmode != AUTH_OPEN) {
+									APInfo[FL("Pass")] = (char *)apConfig.password;
+								}
 							} else {
 								ESPAPP_DEBUG("WARNING: failed to retrieve WiFi base station info.\n");
 							}
 						}
 						{
 							// Collect connected clients
-							JsonArray &Clients = APInfo.createNestedArray(FC("Stations"));
+							JsonArray &Clients = APInfo.createNestedArray(FL("Stations"));
 							struct station_info *staInfo = wifi_softap_get_station_info();
 							while (staInfo) {
 								JsonArray &Station = Clients.createNestedArray();
@@ -1298,18 +1301,19 @@ static void Portal_WebServer_Operations() {
 						}
 					}
 					if ((WiFiMode == WIFI_STA) || (WiFiMode == WIFI_AP_STA)) {
-						JsonObject &STAInfo = Root.createNestedObject(FC("STA"));
+						JsonObject &STAInfo = Root.createNestedObject(FL("STA"));
 						{
 							struct station_config staConfig;
 							if (wifi_station_get_config(&staConfig)) {
-								STAInfo[FC("APName")] = (char *)staConfig.ssid;
-								STAInfo[FC("Connected")] = APConnected;
+								STAInfo[FL("APName")] = (char *)staConfig.ssid;
+								STAInfo[FL("APPass")] = (char *)staConfig.password;
+								STAInfo[FL("Connected")] = APConnected;
 								if (APConnected) {
-									STAInfo[FC("APChannel")] = APCHAN;
-									STAInfo[FC("APMAC")] = PrintMAC(APMAC);
+									STAInfo[FL("APChannel")] = APCHAN;
+									STAInfo[FL("APMAC")] = PrintMAC(APMAC);
 								} else {
 									if (staConfig.bssid_set) {
-										STAInfo[FC("APMAC")] = PrintMAC(staConfig.bssid);
+										STAInfo[FL("APMAC")] = PrintMAC(staConfig.bssid);
 									}
 								}
 							} else {
@@ -1327,8 +1331,70 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
+				auto &Handler = AppGlobal.webServer->on(FL(PORTAL_API_STATE_CONFIG_ZWAPP"$"),
+				[](AsyncWebRequest &request) {
+					AsyncJsonResponse * response =
+						AsyncJsonResponse::CreateNewObjectResponse();
+					JsonObject &Root = response->root.as<JsonObject&>();
+
+					Root[FPSTR(CONFIGKEY_Production)] = AppConfig.Production;
+					Root[FPSTR(CONFIGKEY_PersistWLAN)] = AppConfig.PersistWLAN;
+					switch(AppConfig.PowerSaving) {
+						case WIFI_NONE_SLEEP:
+							Root[FPSTR(CONFIGKEY_PowerSaving)] = FL(POWER_SAVING_NONE);
+							break;
+						case WIFI_MODEM_SLEEP:
+							Root[FPSTR(CONFIGKEY_PowerSaving)] = FL(POWER_SAVING_MODEM);
+							break;
+						case WIFI_LIGHT_SLEEP:
+							Root[FPSTR(CONFIGKEY_PowerSaving)] = FL(POWER_SAVING_LIGHT);
+							break;
+					}
+					Root[FPSTR(CONFIGKEY_WiFi_Power)] = AppConfig.WiFi_Power;
+					Root[FPSTR(CONFIGKEY_WLAN_AP_Name)] = AppConfig.WLAN_AP_Name;
+					Root[FPSTR(CONFIGKEY_WLAN_AP_Pass)] = AppConfig.WLAN_AP_Pass;
+					Root[FPSTR(CONFIGKEY_WLAN_WPS)] = AppConfig.WLAN_WPS;
+					Root[FPSTR(CONFIGKEY_Init_Retry_Count)] = AppConfig.Init_Retry_Count;
+					Root[FPSTR(CONFIGKEY_Init_Retry_Cycle)] = AppConfig.Init_Retry_Cycle;
+					Root[FPSTR(CONFIGKEY_Hostname)] = AppConfig.Hostname;
+					Root[FPSTR(CONFIGKEY_Portal_Timeout)] = AppConfig.Portal_Timeout;
+					Root[FPSTR(CONFIGKEY_Portal_APTest)] = AppConfig.Portal_APTest;
+					Root[FPSTR(CONFIGKEY_NTP_Server)] = AppConfig.NTP_Server;
+					{
+						TimeChangeRule TZR, TZD;
+						AppConfig.TZ.getRules(TZD, TZR);
+						{
+							JsonObject &TZRObj = Root.createNestedObject(FPSTR(CONFIGKEY_TimeZone_Regular));
+							TZRObj[FPSTR(CONFIGKEY_TZ_Name)] = TZR.abbrev;
+							TZRObj[FPSTR(CONFIGKEY_TZ_Week)] = TZR.week;
+							TZRObj[FPSTR(CONFIGKEY_TZ_DayOfWeek)] = TZR.dow;
+							TZRObj[FPSTR(CONFIGKEY_TZ_Month)] = TZR.month;
+							TZRObj[FPSTR(CONFIGKEY_TZ_Hour)] = TZR.hour;
+							TZRObj[FPSTR(CONFIGKEY_TZ_Offset)] = TZR.offset;
+						}
+						{
+							JsonObject &TZDObj = Root.createNestedObject(FPSTR(CONFIGKEY_TimeZone_Daylight));
+							TZDObj[FPSTR(CONFIGKEY_TZ_Name)] = TZD.abbrev;
+							TZDObj[FPSTR(CONFIGKEY_TZ_Week)] = TZD.week;
+							TZDObj[FPSTR(CONFIGKEY_TZ_DayOfWeek)] = TZD.dow;
+							TZDObj[FPSTR(CONFIGKEY_TZ_Month)] = TZD.month;
+							TZDObj[FPSTR(CONFIGKEY_TZ_Hour)] = TZD.hour;
+							TZDObj[FPSTR(CONFIGKEY_TZ_Offset)] = TZD.offset;
+						}
+					}
+
+					request.send(response);
+				});
+				if (isCaptive) {
+					Handler.addFilter([](AsyncWebRequest const &request) {
+						return request.host().equalsIgnoreCase(AppConfig.Hostname);
+					});
+				}
+			}
+
+			{
 				auto &Handler = AppGlobal.webServer->addHandler(
-					new AsyncAPIAPScanWebHandler(FC(PORTAL_API_HWCTL_APSCAN))
+					new AsyncAPIAPScanWebHandler(FL(PORTAL_API_HWCTL_APSCAN))
 				);
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
@@ -1339,8 +1405,8 @@ static void Portal_WebServer_Operations() {
 
 			{
 				auto &Handler = AppGlobal.webServer->addHandler(
-					new AsyncAPIConfigWebHandler(FC(PORTAL_API_CONFIG),
-						get_dir(FC(CONFIG_DIR)))
+					new AsyncAPIConfigWebHandler(FL(PORTAL_API_CONFIG),
+						get_dir(FL(CONFIG_DIR)))
 				);
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
@@ -1351,8 +1417,8 @@ static void Portal_WebServer_Operations() {
 
 			{
 				auto &Handler = AppGlobal.webServer->addHandler(
-					new AsyncAPIOTAWebHandler(FC(PORTAL_API_OTA),
-						FC(PORTAL_ROOT PORTAL_PAGE_OTA))
+					new AsyncAPIOTAWebHandler(FL(PORTAL_API_OTA),
+						FL(PORTAL_ROOT PORTAL_PAGE_OTA))
 				);
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
@@ -1362,8 +1428,8 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->serveStatic(FC(PORTAL_FSDAV_ROOT),
-					VFATFS.openDir(FC("/")), String::EMPTY, FC(DEFAULT_CACHE_CTRL),
+				auto &Handler = AppGlobal.webServer->serveStatic(FL(PORTAL_FSDAV_ROOT),
+					VFATFS.openDir(FL("/")), String::EMPTY, FL(DEFAULT_CACHE_CTRL),
 					true, true);
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
@@ -1373,8 +1439,8 @@ static void Portal_WebServer_Operations() {
 			}
 
 			{
-				auto &Handler = AppGlobal.webServer->serveStatic(FC(PORTAL_ROOT),
-					get_dir(FC(PORTAL_DIR)), FC(PORTAL_PAGE_INDEX), FC(DEFAULT_CACHE_CTRL));
+				auto &Handler = AppGlobal.webServer->serveStatic(FL(PORTAL_ROOT),
+					get_dir(FL(PORTAL_DIR)), FL(PORTAL_PAGE_INDEX), FL(DEFAULT_CACHE_CTRL));
 				if (isCaptive) {
 					Handler.addFilter([](AsyncWebRequest const &request) {
 						return request.host().equalsIgnoreCase(AppConfig.Hostname);
@@ -1382,9 +1448,9 @@ static void Portal_WebServer_Operations() {
 				}
 
 				Handler._onGETIndexNotFound = [](AsyncWebRequest &request) {
-					if (request.url() == FC(PORTAL_ROOT)) {
+					if (request.url() == FL(PORTAL_ROOT)) {
 						Portal_WebServer_RespondBuiltInData(request,
-							PORTAL_RESDATA_INDEX_HTML, FC(PORTAL_PAGE_INDEX));
+							PORTAL_RESDATA_INDEX_HTML, FL(PORTAL_PAGE_INDEX));
 					} else {
 						// Do not allow directory listing
 						request.send(403);
@@ -1921,16 +1987,16 @@ static void APScan_Finished(bss_info* result, STATUS status) {
 				APEntry.concat((char*)scanEntry->ssid, scanEntry->ssid_len);
 				APEntry.concat(']');
 			}
-			APEntry.concat(F(" CH"));
+			APEntry.concat(FL(" CH"));
 			APEntry.concat(scanEntry->channel);
 			APEntry.concat(',');
 			APEntry.concat(scanEntry->rssi);
-			APEntry.concat(FC("dBm "));
+			APEntry.concat(FL("dBm "));
 			APEntry.concat('(');
 			if (scanEntry->phy_11b) APEntry.concat('b');
 			if (scanEntry->phy_11g) APEntry.concat('g');
 			if (scanEntry->phy_11n) APEntry.concat('n');
-			if (scanEntry->wps) APEntry.concat(F(",WPS"));
+			if (scanEntry->wps) APEntry.concat(FL(",WPS"));
 			APEntry.concat(')');
 			APEntry.concat(' ');
 			APEntry.concat(PrintAuth(scanEntry->authmode));

@@ -1,7 +1,7 @@
 #ifndef __PGMRES__
 #define __PGMRES__
 
-#define ZWAPP_VERSION   "0.2"
+#define ZWAPP_VERSION   "0.3"
 
 #define CONFIG_DIR              "/config"
 #define APPLIANCE_CONFIG_FILE   "appliance.json"
@@ -47,6 +47,9 @@
 #define PORTAL_API_STATE_WLAN     PORTAL_API_STATE "wlan"
 #define PORTAL_API_STATE_CLOCK    PORTAL_API_STATE "clock"
 
+#define PORTAL_API_STATE_CONFIG         PORTAL_API_STATE "config/"
+#define PORTAL_API_STATE_CONFIG_ZWAPP   PORTAL_API_STATE_CONFIG "zwapp"
+
 #define PORTAL_API_CONFIG       PORTAL_API_ROOT "config/"
 #define PORTAL_API_AUTH         PORTAL_API_ROOT "auth/"
 #define PORTAL_API_OTA          PORTAL_API_ROOT "ota"
@@ -76,5 +79,28 @@ extern const char PORTAL_RESDATA_MD5_JS[];
 extern const char PORTAL_RESDATA_OTACORE_JS[];
 extern const char PORTAL_RESDATA_JQUERY_JS[];
 extern const char PORTAL_RESDATA_APSCANCORE_JS[];
+
+const char CONFIGKEY_Production[] PROGMEM = "Production";
+const char CONFIGKEY_PersistWLAN[] PROGMEM = "PersistWLAN";
+const char CONFIGKEY_PowerSaving[] PROGMEM = "PowerSaving";
+const char CONFIGKEY_WiFi_Power[] PROGMEM = "WiFi_Power";
+const char CONFIGKEY_WLAN_AP_Name[] PROGMEM = "WLAN_AP_Name";
+const char CONFIGKEY_WLAN_AP_Pass[] PROGMEM = "WLAN_AP_Pass";
+const char CONFIGKEY_WLAN_WPS[] PROGMEM = "WLAN_WPS";
+const char CONFIGKEY_Init_Retry_Count[] PROGMEM = "Init_Retry_Count";
+const char CONFIGKEY_Init_Retry_Cycle[] PROGMEM = "Init_Retry_Cycle";
+const char CONFIGKEY_Hostname[] PROGMEM = "Hostname";
+const char CONFIGKEY_Portal_Timeout[] PROGMEM = "Portal_Timeout";
+const char CONFIGKEY_Portal_APTest[] PROGMEM = "Portal_APTest";
+const char CONFIGKEY_NTP_Server[] PROGMEM = "NTP_Server";
+const char CONFIGKEY_TimeZone_Regular[] PROGMEM = "TimeZone_Regular";
+const char CONFIGKEY_TimeZone_Daylight[] PROGMEM = "TimeZone_Daylight";
+const char CONFIGKEY_TZ_Name[] PROGMEM = "Name";
+const char CONFIGKEY_TZ_Week[] PROGMEM = "Week";
+const char CONFIGKEY_TZ_DayOfWeek[] PROGMEM = "DayOfWeek";
+const char CONFIGKEY_TZ_Month[] PROGMEM = "Month";
+const char CONFIGKEY_TZ_Hour[] PROGMEM = "Hour";
+const char CONFIGKEY_TZ_Offset[] PROGMEM = "Offset";
+
 
 #endif //__PGMRES__
