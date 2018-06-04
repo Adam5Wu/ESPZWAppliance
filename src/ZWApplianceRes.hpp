@@ -3,6 +3,29 @@
 
 #define ZWAPP_VERSION   "0.3"
 
+#define PORTAL_SHUTDOWN_DELAY   1
+#define TRIVIAL_FAILURE_DELAY   300   // Seconds within which a service failure is considered "trivial"
+
+#define WIFI_POWER_MAX          20.5
+#define WIFI_POWER_MEDIUM       10.25
+#define WIFI_POWER_MINIMUM      0
+
+#define POWER_SAVING_NONE       "None"
+#define POWER_SAVING_MODEM      "Modem"
+#define POWER_SAVING_LIGHT      "Light"
+
+#define CONFIG_DEFAULT_POWER_SAVING       WIFI_MODEM_SLEEP
+#define CONFIG_DEFAULT_WIFI_POWER         WIFI_POWER_MEDIUM
+
+#define CONFIG_DEFAULT_HOSTNAME_PFX       "ESP8266-"
+#define CONFIG_DEFAULT_INIT_RETRY_CYCLE   20          // Seconds to wait before retry init steps (AP/NTP) or access point test
+#define CONFIG_DEFAULT_INIT_RETRY_COUNT   2           // Number of retries before fallback to portal mode from init mode
+#define CONFIG_DEFAULT_PORTAL_TIMEOUT     300         // Seconds the web portal is active and idle after enter service mode
+#define CONFIG_DEFAULT_PORTAL_APTEST      60          // Seconds to test access point after entering portal mode and web portal is idle
+
+#define _STR_(x) #x
+#define STR(x) _STR_(x)
+
 #define CONFIG_DIR              "/config"
 #define APPLIANCE_CONFIG_FILE   "appliance.json"
 #define PORTAL_ACCOUNTS_FILE    "portal.accounts.txt"

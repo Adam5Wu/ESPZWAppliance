@@ -41,26 +41,6 @@ extern "C" {
 #define WLAN_PORTAL_GATEWAY IPAddress(0, 0, 0, 0)
 #endif
 
-#define PORTAL_SHUTDOWN_DELAY   1
-#define TRIVIAL_FAILURE_DELAY   300   // Seconds within which a service failure is considered "trivial"
-
-#define WIFI_POWER_MAX          20.5
-#define WIFI_POWER_MEDIUM       10.25
-#define WIFI_POWER_MINIMUM      0
-
-#define POWER_SAVING_NONE       "None"
-#define POWER_SAVING_MODEM      "Modem"
-#define POWER_SAVING_LIGHT      "Light"
-
-#define CONFIG_DEFAULT_POWER_SAVING       WIFI_MODEM_SLEEP
-#define CONFIG_DEFAULT_WIFI_POWER         WIFI_POWER_MEDIUM
-
-#define CONFIG_DEFAULT_HOSTNAME_PFX       "ESP8266-"
-#define CONFIG_DEFAULT_INIT_RETRY_CYCLE   20          // Seconds to wait before retry init steps (AP/NTP) or access point test
-#define CONFIG_DEFAULT_INIT_RETRY_COUNT   2           // Number of retries before fallback to portal mode from init mode
-#define CONFIG_DEFAULT_PORTAL_TIMEOUT     (5 * 60)    // Seconds the web portal is active and idle after enter service mode
-#define CONFIG_DEFAULT_PORTAL_APTEST      60          // Seconds to test access point after entering portal mode and web portal is idle
-
 #define RTC_SLOTS_RESERVED      8
 
 #define RTC_SLOT_FLAGS          0
@@ -1372,7 +1352,7 @@ static void Portal_WebServer_Operations() {
 							TZRObj[FPSTR(CONFIGKEY_TZ_Hour)] = TZR.hour;
 							TZRObj[FPSTR(CONFIGKEY_TZ_Offset)] = TZR.offset;
 						}
-						{
+						if (memcmp(&TZR, &TZD, sizeof(TimeChangeRule))) {
 							JsonObject &TZDObj = Root.createNestedObject(FPSTR(CONFIGKEY_TimeZone_Daylight));
 							TZDObj[FPSTR(CONFIGKEY_TZ_Name)] = TZD.abbrev;
 							TZDObj[FPSTR(CONFIGKEY_TZ_Week)] = TZD.week;
