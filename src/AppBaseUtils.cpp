@@ -114,3 +114,20 @@ String PrintAuth(AUTH_MODE const Auth) {
 		default: return F("UNSUPPORTED");
 	}
 }
+
+// Default implementations of non-Arduino-like ZWAppliance callback functions
+void __userapp_prestart_loop() __attribute__((weak));
+void __userapp_prestart_loop() {
+	// Do Nothing
+}
+
+bool __userapp_startup() __attribute__((weak));
+bool __userapp_startup() {
+	// Do Nothing
+	return true;
+}
+
+void __userapp_teardown() __attribute__((weak));
+void __userapp_teardown() {
+	// Do Nothing
+}

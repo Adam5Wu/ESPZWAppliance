@@ -11,8 +11,7 @@
 // https://github.com/me-no-dev/ESPAsyncUDP
 // https://github.com/Adam5Wu/ESPAsyncWebServer
 
-// This demo presents a bare-bone behaviour of the ZWAppliance
-// It exposes more callback functions than ZWApp_Simple
+// This demo presents a simplified bare-bone behaviour of the ZWAppliance
 // All logic is built into the library
 #define NO_GLOBAL_SPIFFS
 
@@ -33,31 +32,6 @@ void setup() {
 	Serial.println("Service Setup!");
 }
 
-void prestart_loop() {
-  // This function works similar to loop() except:
-  // - It is invoked when ZWAppliance is NOT in service mode
-  //   * Current mode varies, can be one of APP_STARTUP, APP_INIT, APP_PORTAL
-  // - Invocation interval varies, depending on appliance mode and states
-  //   * When stable in APP_PORTAL mode, interval tend to match normal loop()
-  //   * Otherwise, expect random interval up to ~100ms
-
-	Serial.println("Service Pre-start Loopt!");
-	delay(100);
-}
-
-bool startup() {
-  // This function is invoked each time ZWAppliance enters service mode.
-  // The following condition(s) has been reached:
-  // - WiFi: Connected to configured access point
-  // - Time: Synchronized with NTP server if configured (default not)
-  // - WebPortal: Started if idle timeout configured (default 5min)
-  // If return is false, appliance enters service bypass mode, and would
-  //   not call startup/loop/teardown anymore (until next restart)
-
-	Serial.println("Service Startup!");
-	return true;
-}
-
 void loop() {
   // This function is NOT the actual sketch loop.
   // (The sketch loop has been managed by the ZWAppliance)
@@ -68,13 +42,4 @@ void loop() {
 
 	Serial.println("Service Loop!");
 	delay(1000);
-}
-
-void teardown() {
-  // This function is invoked each time ZWAppliance leaves service mode.
-  // The following condition(s) has been reached:
-  // - WiFi: The configure access point has been disconnected, and
-  //           is not reachable within configured timeout
-
-	Serial.println("Service Teardown!");
 }
